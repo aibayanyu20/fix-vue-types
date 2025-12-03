@@ -468,8 +468,11 @@ function resolveInterfaceMembers(
           ; (base.calls || (base.calls = [])).push(...calls)
         }
       }
-      // eslint-disable-next-line unused-imports/no-unused-vars
-      catch (_e: any) {
+
+      catch (e: any) {
+        if (e instanceof Error && e.message.includes('TypeScript is required')) {
+          throw e
+        }
         ctx.error(
           `Failed to resolve extends base type.\nIf this previously worked in 3.2, `
           + `you can instruct the compiler to ignore this extend by adding `
@@ -900,9 +903,20 @@ let loadTS: (() => typeof TS) | undefined
  * @private
  */
 export function registerTS(_loadTS: () => typeof TS): void {
-  loadTS = () => {
+  loadTS = _loadTS
+  ts = undefined
+}
+
+type FS = NonNullable<SFCScriptCompileOptions['fs']>
+
+function resolveFS(ctx: TypeResolveContext): FS | undefined {
+  if (ctx.fs) {
+    return ctx.fs
+  }
+  console.log('resolveFS: resolving fs')
+  if (!ts && loadTS) {
     try {
-      return _loadTS()
+      ts = loadTS()
     }
     catch (err: any) {
       if (
@@ -920,18 +934,6 @@ export function registerTS(_loadTS: () => typeof TS): void {
         )
       }
     }
-  }
-}
-
-type FS = NonNullable<SFCScriptCompileOptions['fs']>
-
-function resolveFS(ctx: TypeResolveContext): FS | undefined {
-  if (ctx.fs) {
-    return ctx.fs
-  }
-  console.log('resolveFS: resolving fs')
-  if (!ts && loadTS) {
-    ts = loadTS()
   }
   const fs = ctx.options.fs || ts?.sys
   if (!fs) {
