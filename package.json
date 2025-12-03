@@ -24,7 +24,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "lint": "eslint . --fix",
-    "bump": "bumpp"
+    "bump": "bumpp",
+    "prepublish": "pnpm build"
   },
   "dependencies": {
     "@babel/parser": "^7.28.5",
