@@ -913,7 +913,6 @@ function resolveFS(ctx: TypeResolveContext): FS | undefined {
   if (ctx.fs) {
     return ctx.fs
   }
-  console.log('resolveFS: resolving fs')
   if (!ts && loadTS) {
     try {
       ts = loadTS()
