@@ -54,6 +54,8 @@ const SupportedBuiltinsSet = new Set([
   'Pick',
   'Omit',
   'Record',
+  'Extract',
+  'Exclude',
 ] as const)
 
 export type SimpleTypeResolveOptions = Partial<
@@ -763,7 +765,92 @@ function resolveBuiltin(
     case 'Record': {
       return { props: {}, calls: t.calls }
     }
+    case 'Extract':
+    case 'Exclude': {
+      const t = node.typeParameters!.params[0]
+      const u = node.typeParameters!.params[1]
+      const members = resolveUnionMembers(ctx, t, scope, typeParameters)
+      const filtered: Node[] = []
+      for (const member of members) {
+        const isAssignable = checkAssignability(ctx, member, u, scope, typeParameters)
+        if (name === 'Extract' ? isAssignable : !isAssignable) {
+          filtered.push(member)
+        }
+      }
+      return mergeElements(
+        filtered.map(m => resolveTypeElements(ctx, m, scope, typeParameters)),
+        'TSUnionType',
+      )
+    }
   }
+}
+
+function resolveUnionMembers(
+  ctx: TypeResolveContext,
+  node: Node,
+  scope: TypeScope,
+  typeParameters?: Record<string, Node>,
+): Node[] {
+  switch (node.type) {
+    case 'TSUnionType':
+      return node.types.flatMap(t => resolveUnionMembers(ctx, t, scope, typeParameters))
+    case 'TSTypeReference': {
+      const resolved = resolveTypeReference(ctx, node, scope)
+      if (resolved) {
+        // If resolved is a union, expand it. Otherwise return the reference itself (so we can check name equality)
+        // Wait, if we return resolved node, checkAssignability might fail if it expects TSTypeReference.
+        // But if we return the reference node, we can check name.
+        // However, if the reference points to a union, we MUST expand it.
+        if (resolved.type === 'TSUnionType' || resolved.type === 'TSTypeAliasDeclaration') {
+          return resolveUnionMembers(ctx, resolved, resolved._ownerScope)
+        }
+        // If it points to interface, return the reference node (node) NOT the resolved node.
+        // Because checkAssignability checks TSTypeReference structure.
+        return [node]
+      }
+      if (node.typeName.type === 'Identifier' && typeParameters && typeParameters[node.typeName.name]) {
+        return resolveUnionMembers(ctx, typeParameters[node.typeName.name], scope, typeParameters)
+      }
+      break
+    }
+    case 'TSTypeAliasDeclaration':
+      return resolveUnionMembers(ctx, node.typeAnnotation, scope, typeParameters)
+    case 'TSParenthesizedType':
+      return resolveUnionMembers(ctx, node.typeAnnotation, scope, typeParameters)
+  }
+  return [node]
+}
+
+function checkAssignability(
+  ctx: TypeResolveContext,
+  t: Node,
+  u: Node,
+  scope: TypeScope,
+  typeParameters?: Record<string, Node>,
+): boolean {
+  // Basic implementation: check if T and U reference the same type
+  // or if they are the same literal type
+  if (t.type === 'TSTypeReference' && u.type === 'TSTypeReference') {
+    const tName = getReferenceName(t)
+    const uName = getReferenceName(u)
+    if (tName === uName) {
+      // If names match, check if they resolve to the same thing
+      const tResolved = resolveTypeReference(ctx, t, scope)
+      const uResolved = resolveTypeReference(ctx, u, scope)
+      if (tResolved && uResolved && tResolved === uResolved) {
+        return true
+      }
+      // If one is generic parameter, and names match
+      if (typeParameters && tName && uName && typeParameters[tName] && typeParameters[uName]) {
+        return true
+      }
+      // If names match and no resolution (e.g. global types or missing), assume match?
+      // Better to check resolution.
+    }
+  }
+
+  // TODO: More complex assignability checks (literals, structural, etc.)
+  return false
 }
 
 type ReferenceTypes
