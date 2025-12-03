@@ -3,6 +3,7 @@ import type {
   Expression,
   Identifier,
   Node,
+  ObjectExpression,
   Statement,
   TemplateLiteral,
   TSCallSignatureDeclaration,
@@ -49,7 +50,6 @@ import {
 // ...
 
 function resolveClassMembers(
-  ctx: TypeResolveContext,
   node: ClassDeclaration & MaybeWithScope,
   scope: TypeScope,
   typeParameters?: Record<string, Node>,
@@ -57,7 +57,7 @@ function resolveClassMembers(
   const res: ResolvedElements = { props: {} }
   if (node.body && node.body.body) {
     for (const e of node.body.body) {
-      if (e.type === 'ClassProperty' || e.type === 'ClassMethod' || e.type === 'PropertyDefinition' || e.type === 'MethodDefinition') {
+      if (e.type === 'ClassProperty' || e.type === 'ClassMethod') {
         if (e.static)
           continue
         if (e.accessibility === 'private' || e.accessibility === 'protected')
@@ -72,7 +72,7 @@ function resolveClassMembers(
         ; (e as MaybeWithScope)._ownerScope = scope
         const name = getStringLiteralKey(e)
         if (name !== null) {
-          const typeNode = e.typeAnnotation && e.typeAnnotation.type === 'TSTypeAnnotation'
+          const typeNode = e.type === 'ClassProperty' && e.typeAnnotation && e.typeAnnotation.type === 'TSTypeAnnotation'
             ? e.typeAnnotation.typeAnnotation
             : { type: 'TSAnyKeyword' }
 
@@ -255,7 +255,7 @@ function innerResolveTypeElements(
     case 'TSInterfaceDeclaration':
       return resolveInterfaceMembers(ctx, node, scope, typeParameters)
     case 'ClassDeclaration':
-      return resolveClassMembers(ctx, node, scope, typeParameters)
+      return resolveClassMembers(node, scope, typeParameters)
     case 'TSTypeAliasDeclaration':
     case 'TSTypeAnnotation':
     case 'TSParenthesizedType':
@@ -310,6 +310,7 @@ function innerResolveTypeElements(
             || resolved.type === 'TSInterfaceDeclaration'
             || resolved.type === 'ClassDeclaration')
           && resolved.typeParameters
+          && resolved.typeParameters.type !== 'Noop'
           && node.typeParameters
         ) {
           typeParams = Object.create(null)
@@ -867,6 +868,9 @@ function resolveBuiltin(
     }
     case 'InstanceType': {
       const t = node.typeParameters!.params[0]
+      if (t.type !== 'TSTypeReference' && t.type !== 'TSImportType' && t.type !== 'TSExpressionWithTypeArguments' && t.type !== 'TSTypeQuery') {
+        return { props: {} }
+      }
       const resolved = resolveTypeReference(ctx, t, scope)
       if (resolved) {
         if (resolved.type === 'ClassDeclaration') {
@@ -994,7 +998,7 @@ function checkAssignability(
         return true
       }
       // If one is generic parameter, and names match
-      if (typeParameters && tName && uName && typeParameters[tName] && typeParameters[uName]) {
+      if (typeParameters && typeof tName === 'string' && typeof uName === 'string' && typeParameters[tName] && typeParameters[uName]) {
         return true
       }
       // If names match and no resolution (e.g. global types or missing), assume match?
@@ -2482,7 +2486,13 @@ function resolveReturnType(
   ctx: TypeResolveContext,
   arg: Node,
   scope: TypeScope,
+  typeParameters?: Record<string, Node>,
 ) {
+  if (typeParameters) {
+    scope = createChildScope(scope)
+    scope.isGenericScope = true
+    Object.assign(scope.types, typeParameters)
+  }
   let resolved: Node | undefined = arg
   if (
     arg.type === 'TSTypeReference'

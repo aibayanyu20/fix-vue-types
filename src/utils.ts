@@ -1,5 +1,7 @@
 import type {
   CallExpression,
+  ClassMethod,
+  ClassProperty,
   Expression,
   Identifier,
   ImportDefaultSpecifier,
@@ -86,7 +88,7 @@ export function getId(node: Expression) {
 }
 
 export function getStringLiteralKey(
-  node: TSPropertySignature | TSMethodSignature,
+  node: TSPropertySignature | TSMethodSignature | ClassProperty | ClassMethod,
 ): string | null {
   return node.computed
     ? node.key.type === 'TemplateLiteral' && !node.key.expressions.length

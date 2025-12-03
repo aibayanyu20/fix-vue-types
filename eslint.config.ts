@@ -6,5 +6,6 @@ export default antfu({
   ],
   rules: {
     'no-console': 0,
+    'node/prefer-global/process': 0,
   },
 })
