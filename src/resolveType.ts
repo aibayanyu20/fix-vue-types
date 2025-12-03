@@ -711,14 +711,16 @@ function resolveBuiltin(
   scope: TypeScope,
   typeParameters?: Record<string, Node>,
 ): ResolvedElements {
-  const t = resolveTypeElements(
+  const resolveT = () => resolveTypeElements(
     ctx,
     node.typeParameters!.params[0],
     scope,
     typeParameters,
   )
+
   switch (name) {
     case 'Partial': {
+      const t = resolveT()
       const res: ResolvedElements = { props: {}, calls: t.calls }
       Object.keys(t.props).forEach((key) => {
         res.props[key] = { ...t.props[key], optional: true }
@@ -726,6 +728,7 @@ function resolveBuiltin(
       return res
     }
     case 'Required': {
+      const t = resolveT()
       const res: ResolvedElements = { props: {}, calls: t.calls }
       Object.keys(t.props).forEach((key) => {
         res.props[key] = { ...t.props[key], optional: false }
@@ -733,8 +736,9 @@ function resolveBuiltin(
       return res
     }
     case 'Readonly':
-      return t
+      return resolveT()
     case 'Pick': {
+      const t = resolveT()
       const picked = resolveStringType(
         ctx,
         node.typeParameters!.params[1],
@@ -748,6 +752,7 @@ function resolveBuiltin(
       return res
     }
     case 'Omit': {
+      const t = resolveT()
       const omitted = resolveStringType(
         ctx,
         node.typeParameters!.params[1],
@@ -763,7 +768,33 @@ function resolveBuiltin(
       return res
     }
     case 'Record': {
-      return { props: {}, calls: t.calls }
+      const keysParam = node.typeParameters!.params[0]
+      const valueType = node.typeParameters!.params[1]
+
+      if (keysParam.type === 'TSStringKeyword') {
+        return { props: {} }
+      }
+
+      const keys = resolveStringType(
+        ctx,
+        keysParam,
+        scope,
+        typeParameters,
+      )
+
+      const res: ResolvedElements = { props: {} }
+      for (const key of keys) {
+        res.props[key] = createProperty(
+          {
+            type: 'Identifier',
+            name: key,
+          },
+          valueType,
+          scope,
+          true,
+        )
+      }
+      return res
     }
     case 'Extract':
     case 'Exclude': {
