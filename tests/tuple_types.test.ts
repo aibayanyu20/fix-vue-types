@@ -50,4 +50,73 @@ describe('tuple types', () => {
     expect(content).toMatch(`record: { type: Object, required: true }`)
     expect(content).toMatch(`color: { type: String, required: true }`)
   })
+  it('should resolve type', () => {
+    const { content} = compile(`
+    <script setup lang="ts">
+        export const PresetStatusColorTypes = [
+          'success',
+          'processing',
+          'error',
+          'default',
+          'warning',
+        ] as const
+        export type PresetStatusColorType = (typeof PresetStatusColorTypes)[number]
+        defineProps<Record<PresetStatusColorType,boolean>>()
+    </script>
+    `)
+    expect(content).toMatch(`success: { type: Boolean, required: false }`)
+  });
+
+  it('should resolve nested tuple types', () => {
+    const { content} = compile(`
+    <script setup lang="ts">
+        const arr = ['1', '2', '3'] as const
+
+        // 1. Array -> Union
+        type TupleToUnion<T extends readonly any[]> = T[number]
+        type Keys = TupleToUnion<typeof arr>
+        defineProps<Record<Keys,boolean>>()
+    </script>
+   `)
+    expect(content).toMatch(`1: { type: Boolean, required: false }`)
+    expect(content).toMatch(`2: { type: Boolean, required: false }`)
+    expect(content).toMatch(`3: { type: Boolean, required: false }`)
+  })
+
+  it('should resolve complex', () => {
+    const { content} = compile(`
+    <script setup lang="ts">
+        const arr = ['1', '2', '3'] as const
+
+        // 1. Array -> Union
+        type TupleToObject<T extends readonly string[]> = {
+          [K in T[number]]: K
+        }
+        type Obj = TupleToObject<typeof arr>
+        defineProps<Obj>()
+    </script>
+   `)
+
+    expect(content).toMatch(`1: { type: null, required: true }`)
+    expect(content).toMatch(`2: { type: null, required: true }`)
+    expect(content).toMatch(`3: { type: null, required: true }`)
+  });
+  it('should resolve complex2', () => {
+    const { content} = compile(`
+    <script setup lang="ts">
+        const arr = ['1', '2', '3'] as const
+
+        // 1. Array -> Union
+        type TupleToRecord<T extends readonly string[], V> = {
+          [K in T[number]]: V
+        }
+        type Obj2 = TupleToRecord<typeof arr, boolean>
+        defineProps<Obj2>()
+    </script>
+   `)
+
+    expect(content).toMatch(`1: { type: Boolean, required: true }`)
+    expect(content).toMatch(`2: { type: Boolean, required: true }`)
+    expect(content).toMatch(`3: { type: Boolean, required: true }`)
+  });
 })

@@ -555,12 +555,20 @@ function resolveMappedType(
   if (node.nameType) {
     const { name, constraint } = node.typeParameter
     scope = createChildScope(scope)
-    Object.assign(scope.types, { ...typeParameters, [name]: constraint })
+    Object.assign(scope.types, { [name]: constraint })
     keys = resolveStringType(ctx, node.nameType, scope)
   }
   else {
     keys = resolveStringType(ctx, node.typeParameter.constraint!, scope, typeParameters)
   }
+
+  let propScope = scope
+  if (typeParameters) {
+    propScope = createChildScope(scope)
+    propScope.isGenericScope = true
+    Object.assign(propScope.types, typeParameters)
+  }
+
   for (const key of keys) {
     res.props[key] = createProperty(
       {
@@ -568,7 +576,7 @@ function resolveMappedType(
         name: key,
       },
       node.typeAnnotation!,
-      scope,
+      propScope,
       !!node.optional,
     )
   }
@@ -696,6 +704,28 @@ function resolveStringType(
     case 'TSTypeReference': {
       const resolved = resolveTypeReference(ctx, node, scope)
       if (resolved) {
+        if (resolved.type === 'TSTypeAliasDeclaration') {
+          if (node.typeParameters) {
+            const typeParams: Record<string, Node> = Object.create(null)
+            if (resolved.typeParameters) {
+              resolved.typeParameters.params.forEach((p, i) => {
+                typeParams![p.name] = node.typeParameters!.params[i]
+              })
+            }
+            return resolveStringType(
+              ctx,
+              resolved.typeAnnotation,
+              resolved._ownerScope,
+              typeParams,
+            )
+          }
+          return resolveStringType(
+            ctx,
+            resolved.typeAnnotation,
+            resolved._ownerScope,
+            typeParameters,
+          )
+        }
         return resolveStringType(ctx, resolved, scope, typeParameters)
       }
       if (node.typeName.type === 'Identifier') {
@@ -751,6 +781,10 @@ function resolveStringType(
         return Object.keys(resolved.props)
       }
       break
+    }
+    case 'TSIndexedAccessType': {
+      const types = resolveIndexType(ctx, node, scope, typeParameters)
+      return types.flatMap(t => resolveStringType(ctx, t, t._ownerScope || scope, typeParameters))
     }
   }
   return ctx.error('Failed to resolve index type into finite keys', node, scope)
