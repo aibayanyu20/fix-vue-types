@@ -277,9 +277,9 @@ function innerResolveTypeElements(
     case 'TSMappedType':
       return resolveMappedType(ctx, node, scope, typeParameters)
     case 'TSIndexedAccessType': {
-      const types = resolveIndexType(ctx, node, scope)
+      const types = resolveIndexType(ctx, node, scope, typeParameters)
       return mergeElements(
-        types.map(t => resolveTypeElements(ctx, t, t._ownerScope)),
+        types.map(t => resolveTypeElements(ctx, t, t._ownerScope, typeParameters)),
         'TSUnionType',
       )
     }
@@ -579,9 +579,10 @@ function resolveIndexType(
   ctx: TypeResolveContext,
   node: TSIndexedAccessType,
   scope: TypeScope,
+  typeParameters?: Record<string, Node>,
 ): (TSType & MaybeWithScope)[] {
   if (node.indexType.type === 'TSNumberKeyword') {
-    return resolveArrayElementType(ctx, node.objectType, scope)
+    return resolveArrayElementType(ctx, node.objectType, scope, typeParameters)
   }
 
   const { indexType, objectType } = node
@@ -589,12 +590,12 @@ function resolveIndexType(
   let keys: string[]
   let resolved: ResolvedElements
   if (indexType.type === 'TSStringKeyword') {
-    resolved = resolveTypeElements(ctx, objectType, scope)
+    resolved = resolveTypeElements(ctx, objectType, scope, typeParameters)
     keys = Object.keys(resolved.props)
   }
   else {
-    keys = resolveStringType(ctx, indexType, scope)
-    resolved = resolveTypeElements(ctx, objectType, scope)
+    keys = resolveStringType(ctx, indexType, scope, typeParameters)
+    resolved = resolveTypeElements(ctx, objectType, scope, typeParameters)
   }
   for (const key of keys) {
     const targetType = resolved.props[key]?.typeAnnotation?.typeAnnotation
@@ -611,6 +612,7 @@ function resolveArrayElementType(
   ctx: TypeResolveContext,
   node: Node,
   scope: TypeScope,
+  typeParameters?: Record<string, Node>,
 ): TSType[] {
   // type[]
   if (node.type === 'TSArrayType') {
@@ -628,10 +630,42 @@ function resolveArrayElementType(
       return node.typeParameters.params
     }
     else {
+      const name = getReferenceName(node)
+      if (typeof name === 'string' && typeParameters && typeParameters[name]) {
+        return resolveArrayElementType(ctx, typeParameters[name], scope, typeParameters)
+      }
       const resolved = resolveTypeReference(ctx, node, scope)
       if (resolved) {
-        return resolveArrayElementType(ctx, resolved, scope)
+        return resolveArrayElementType(ctx, resolved, scope, typeParameters)
       }
+    }
+  }
+  if (node.type === 'TSTypeQuery') {
+    const resolved = resolveTypeReference(ctx, node, scope)
+    if (resolved) {
+      return resolveArrayElementType(ctx, resolved, scope, typeParameters)
+    }
+  }
+  if (node.type === 'TSParenthesizedType') {
+    return resolveArrayElementType(ctx, node.typeAnnotation, scope, typeParameters)
+  }
+  if (node.type === 'ArrayExpression') {
+    return node.elements.map(e =>
+      e ? inferTypeFromExpression(ctx, e, scope) : { type: 'TSAnyKeyword' },
+    )
+  }
+  if (node.type === 'TSAsExpression' || node.type === 'TSTypeAssertion') {
+    return resolveArrayElementType(ctx, node.expression, scope, typeParameters)
+  }
+  if (node.type === 'VariableDeclarator' && node.init) {
+    let init = node.init
+    while (init.type === 'TSAsExpression' || init.type === 'TSTypeAssertion') {
+      init = init.expression
+    }
+    if (init.type === 'ArrayExpression') {
+      return init.elements.map(e =>
+        e ? inferTypeFromExpression(ctx, e, scope) : { type: 'TSAnyKeyword' },
+      )
     }
   }
   return ctx.error(
@@ -2231,6 +2265,11 @@ export function inferRuntimeType(
           typeParameters,
         ).filter(t => t !== UNKNOWN_TYPE)
       }
+      case 'TSIndexedAccessType': {
+        const types = resolveIndexType(ctx, node, scope, typeParameters)
+        return flattenTypes(ctx, types, scope, isKeyOf, typeParameters)
+      }
+
       case 'TSMappedType': {
         // only support { [K in keyof T]: T[K] }
         const { typeAnnotation, typeParameter } = node
@@ -2270,7 +2309,7 @@ export function inferRuntimeType(
           }
         }
 
-        return [UNKNOWN_TYPE]
+        return ['Object']
       }
 
       case 'TSEnumDeclaration':
@@ -2278,11 +2317,6 @@ export function inferRuntimeType(
 
       case 'TSSymbolKeyword':
         return ['Symbol']
-
-      case 'TSIndexedAccessType': {
-        const types = resolveIndexType(ctx, node, scope)
-        return flattenTypes(ctx, types, scope, isKeyOf)
-      }
 
       case 'ClassDeclaration':
         return ['Object']
