@@ -998,14 +998,6 @@ function importSourceToScope(
     }
     else {
       // module or aliased import - use full TS resolution, only supported in Node
-      // @ts-expect-error: globalThis is not defined in all environments
-      if (!globalThis.__CJS__) {
-        return ctx.error(
-          `Type import from non-relative sources is not supported in the browser build.`,
-          node,
-          scope,
-        )
-      }
       if (!ts) {
         if (loadTS)
           ts = loadTS()
@@ -1168,12 +1160,6 @@ function resolveWithTS(
   catch (e) {
     // ignore
   }
-  // @ts-expect-error: globalThis is not defined in all environments
-  if (!globalThis.__CJS__) {
-    console.log('resolveWithTS: not CJS')
-    return
-  }
-
   // 1. resolve tsconfig.json
   const configPath = ts.findConfigFile(containingFile, fs.fileExists)
   // 2. load tsconfig.json

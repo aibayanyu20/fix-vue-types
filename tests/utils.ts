@@ -17,7 +17,6 @@ export function compile(
   content: string
   bindings?: any
 } {
-  globalThis.__CJS__ = true
   const { descriptor } = parse(src)
   const ctx = new ScriptCompileContext(descriptor, {
     id: 'test',
