@@ -382,4 +382,21 @@ const bar = 1
       cc: BindingTypes.PROPS,
     })
   })
+
+  it('w/ import by ant-design-vue',()=>{
+    const { content, bindings } = compile(`
+    <script setup lang="ts">
+    import { TableProps } from "ant-design-vue"
+    export type MyTableProps = TableProps & {
+      sss?: string
+    }
+    defineProps<MyTableProps>()
+    </script>
+    `)
+    assertCode(content)
+    expect(content).toMatch(`columns: { type: Array, required: false }`)
+    expect(bindings).toMatchObject({
+      columns: BindingTypes.PROPS,
+    })
+  })
 })

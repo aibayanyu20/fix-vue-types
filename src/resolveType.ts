@@ -1040,13 +1040,13 @@ function resolveExt(filename: string, fs: FS) {
       return filename
   }
   return (
-    tryResolve(filename)
-    || tryResolve(`${filename}.ts`)
+    tryResolve(`${filename}.ts`)
     || tryResolve(`${filename}.tsx`)
     || tryResolve(`${filename}.d.ts`)
     || tryResolve(joinPaths(filename, `index.ts`))
     || tryResolve(joinPaths(filename, `index.tsx`))
     || tryResolve(joinPaths(filename, `index.d.ts`))
+    || tryResolve(filename)
   )
 }
 
