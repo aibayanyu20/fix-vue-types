@@ -1877,7 +1877,7 @@ function parseFile(
       plugins: resolveParserPlugins(
         ext.slice(1),
         parserPlugins,
-        true, // dts: true
+        /\\.d\\.m?tsx?$/.test(filename),
       ),
       sourceType: 'module',
     }).program.body
