@@ -1588,9 +1588,17 @@ function resolveExt(filename: string, fs: FS) {
     tryResolve(`${filename}.ts`)
     || tryResolve(`${filename}.tsx`)
     || tryResolve(`${filename}.d.ts`)
+    || tryResolve(`${filename}.mts`)
+    || tryResolve(`${filename}.cts`)
+    || tryResolve(`${filename}.d.mts`)
+    || tryResolve(`${filename}.d.cts`)
     || tryResolve(joinPaths(filename, `index.ts`))
     || tryResolve(joinPaths(filename, `index.tsx`))
     || tryResolve(joinPaths(filename, `index.d.ts`))
+    || tryResolve(joinPaths(filename, `index.mts`))
+    || tryResolve(joinPaths(filename, `index.cts`))
+    || tryResolve(joinPaths(filename, `index.d.mts`))
+    || tryResolve(joinPaths(filename, `index.d.cts`))
     || tryResolve(filename)
   )
 }
@@ -1872,12 +1880,12 @@ function parseFile(
   parserPlugins?: SFCScriptCompileOptions['babelParserPlugins'],
 ): Statement[] {
   const ext = extname(filename)
-  if (ext === '' || ext === '.mts' || ext === '.tsx' || ext === '.mtsx') {
+  if (ext === '' || ext === '.mts' || ext === '.tsx' || ext === '.mtsx' || ext === '.cts' || ext === '.mcts') {
     return babelParse(content, {
       plugins: resolveParserPlugins(
         ext.slice(1),
         parserPlugins,
-        /\\.d\\.m?tsx?$/.test(filename),
+        /\\.d\\.m?[tc]sx?$/.test(filename),
       ),
       sourceType: 'module',
     }).program.body
