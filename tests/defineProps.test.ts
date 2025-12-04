@@ -106,7 +106,7 @@ const bar = 1
     expect(content).toMatch(`tuple: { type: Array, required: true }`)
     expect(content).toMatch(`set: { type: Set, required: true }`)
     expect(content).toMatch(`literal: { type: String, required: true }`)
-    expect(content).toMatch(`optional: { type: null, required: false }`)
+    expect(content).toMatch(`optional: { required: false }`)
     expect(content).toMatch(`recordRef: { type: Object, required: true }`)
     expect(content).toMatch(`interface: { type: Object, required: true }`)
     expect(content).toMatch(`alias: { type: Array, required: true }`)
@@ -134,9 +134,9 @@ const bar = 1
     expect(content).toMatch(`intersection: { type: Object, required: true }`)
     expect(content).toMatch(`intersection2: { type: String, required: true }`)
     expect(content).toMatch(`foo: { type: [Function, null], required: true }`)
-    expect(content).toMatch(`unknown: { type: null, required: true }`)
+    expect(content).toMatch(`unknown: { required: true }`)
     // uninon containing unknown type: skip check
-    expect(content).toMatch(`unknownUnion: { type: null, required: true }`)
+    expect(content).toMatch(`unknownUnion: { required: true }`)
     // intersection containing unknown type: narrow to the known types
     expect(content).toMatch(
       `unknownIntersection: { type: Object, required: true },`,
@@ -356,7 +356,7 @@ const bar = 1
     assertCode(content)
     expect(content).toMatch(`cc: { type: String, required: true }`)
     expect(content).toMatch(
-      `disabled: { type: [Boolean, String], required: false, skipCheck: true }`,
+      `disabled: { type: [Boolean, String, null], required: false }`,
     )
     expect(bindings).toMatchObject({
       cc: BindingTypes.PROPS,

@@ -38,6 +38,64 @@ export function compile(
     ...(scriptSetupAst ? scriptSetupAst.body : []),
   ]
   ctx.userImports = recordImports(body) as any
+  
+  // Manually populate scope with local types
+  if (!ctx.scope) {
+    // @ts-expect-error: accessing private property
+    ctx.scope = {
+      types: Object.create(null),
+      imports: ctx.userImports,
+      filename: ctx.filename,
+      source: ctx.source,
+      offset: 0,
+      isGenericScope: false,
+      declares: Object.create(null),
+      resolvedImportSources: Object.create(null),
+    }
+  }
+  for (const node of body) {
+    if (
+      node.type === 'TSTypeAliasDeclaration'
+      || node.type === 'TSInterfaceDeclaration'
+      || node.type === 'TSEnumDeclaration'
+    ) {
+      // @ts-expect-error: accessing private property
+      ctx.scope.types[node.id.name] = node
+    }
+    else if (node.type === 'VariableDeclaration') {
+      for (const decl of node.declarations) {
+        if (decl.id.type === 'Identifier') {
+          // @ts-expect-error: accessing private property
+          ctx.scope.declares[decl.id.name] = decl
+        }
+      }
+    }
+    else if (node.type === 'ClassDeclaration' && node.id) {
+      // @ts-expect-error: accessing private property
+      ctx.scope.types[node.id.name] = node
+      // @ts-expect-error: accessing private property
+      ctx.scope.declares[node.id.name] = node
+    }
+    else if (node.type === 'ExportNamedDeclaration' && node.declaration) {
+      const decl = node.declaration
+      if (
+        decl.type === 'TSTypeAliasDeclaration'
+        || decl.type === 'TSInterfaceDeclaration'
+        || decl.type === 'TSEnumDeclaration'
+      ) {
+        // @ts-expect-error: accessing private property
+        ctx.scope.types[decl.id.name] = decl
+      }
+      else if (decl.type === 'VariableDeclaration') {
+        for (const d of decl.declarations) {
+          if (d.id.type === 'Identifier') {
+            // @ts-expect-error: accessing private property
+            ctx.scope.declares[d.id.name] = d
+          }
+        }
+      }
+    }
+  }
 
   // Manually traverse AST to find defineProps/defineEmits and populate context
   if (scriptSetupAst) {

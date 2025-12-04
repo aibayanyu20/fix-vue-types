@@ -7,6 +7,7 @@ import type {
   Statement,
   TemplateLiteral,
   TSCallSignatureDeclaration,
+  TSConditionalType,
   TSEnumDeclaration,
   TSExpressionWithTypeArguments,
   TSFunctionType,
@@ -19,6 +20,7 @@ import type {
   TSModuleDeclaration,
   TSPropertySignature,
   TSQualifiedName,
+  TSTemplateLiteralType,
   TSType,
   TSTypeAnnotation,
   TSTypeElement,
@@ -95,10 +97,11 @@ function resolveClassMembers(
 const SupportedBuiltinsSet = new Set([
   'Partial',
   'Required',
+  'Record',
   'Readonly',
   'Pick',
   'Omit',
-  'Record',
+  'FlatArray',
   'Extract',
   'Exclude',
   'InstanceType',
@@ -265,8 +268,23 @@ function innerResolveTypeElements(
         scope,
         typeParameters,
       )
+    case 'TSNeverKeyword':
+      return { props: {} }
     case 'TSFunctionType': {
       return { props: {}, calls: [node] }
+    }
+    case 'TSTupleType': {
+      const res: ResolvedElements = { props: {} }
+      node.elementTypes.forEach((type, index) => {
+        const elementType = type.type === 'TSNamedTupleMember' ? type.elementType : type
+        res.props[String(index)] = createProperty(
+          { type: 'NumericLiteral', value: index },
+          elementType,
+          scope,
+          type.type === 'TSNamedTupleMember' ? !!type.optional : false,
+        )
+      })
+      return res
     }
     case 'TSUnionType':
     case 'TSIntersectionType':
@@ -283,6 +301,8 @@ function innerResolveTypeElements(
         'TSUnionType',
       )
     }
+    case 'TSConditionalType':
+      return resolveConditionalType(ctx, node, scope, typeParameters)
     case 'TSExpressionWithTypeArguments': // referenced by interface extends
     case 'TSTypeReference': {
       const typeName = getReferenceName(node)
@@ -407,6 +427,11 @@ function innerResolveTypeElements(
       return resolveTypeElements(ctx, node.expression, scope, typeParameters)
     case 'ObjectExpression':
       return resolveObjectExpression(ctx, node, scope)
+    case 'VariableDeclarator':
+      if (node.init) {
+        return resolveTypeElements(ctx, node.init, scope, typeParameters)
+      }
+      break
   }
   return ctx.error(`Unresolvable type: ${node.type}`, node, scope)
 }
@@ -454,6 +479,7 @@ function mergeElements(
     return maps[0]
   const res: ResolvedElements = { props: {} }
   const { props: baseProps } = res
+
   for (const { props, calls } of maps) {
     for (const key in props) {
       if (!hasOwn(baseProps, key)) {
@@ -556,7 +582,7 @@ function resolveMappedType(
     const { name, constraint } = node.typeParameter
     scope = createChildScope(scope)
     Object.assign(scope.types, { [name]: constraint })
-    keys = resolveStringType(ctx, node.nameType, scope)
+    keys = resolveStringType(ctx, node.nameType, scope, typeParameters)
   }
   else {
     keys = resolveStringType(ctx, node.typeParameter.constraint!, scope, typeParameters)
@@ -570,14 +596,31 @@ function resolveMappedType(
   }
 
   for (const key of keys) {
+    let perPropScope = propScope
+    if (node.typeParameter.name) {
+      perPropScope = createChildScope(propScope)
+      Object.assign(perPropScope.types, {
+        [node.typeParameter.name]: {
+          type: 'TSLiteralType',
+          literal: { type: 'StringLiteral', value: key },
+        },
+      })
+    }
+    const typeAnnotation = { ...node.typeAnnotation! }
+    if (typeAnnotation.type === 'TSIndexedAccessType') {
+      typeAnnotation.indexType = { ...typeAnnotation.indexType }
+    }
+
+    const optional = node.optional === '+' || node.optional === true || (node.optional !== '-' && !!node.optional)
+
     res.props[key] = createProperty(
       {
         type: 'Identifier',
         name: key,
       },
-      node.typeAnnotation!,
-      propScope,
-      !!node.optional,
+      typeAnnotation,
+      perPropScope,
+      optional,
     )
   }
   return res
@@ -590,7 +633,8 @@ function resolveIndexType(
   typeParameters?: Record<string, Node>,
 ): (TSType & MaybeWithScope)[] {
   if (node.indexType.type === 'TSNumberKeyword') {
-    return resolveArrayElementType(ctx, node.objectType, scope, typeParameters)
+    const res = resolveArrayElementType(ctx, node.objectType, scope, typeParameters)
+    return res
   }
 
   const { indexType, objectType } = node
@@ -692,15 +736,65 @@ function resolveStringType(
   switch (node.type) {
     case 'StringLiteral':
       return [node.value]
+    case 'NumericLiteral':
+      return [String(node.value)]
+    case 'TSIntrinsicKeyword':
+      return [] // Intrinsic types like Capitalize might resolve to this if not handled
+    case 'TSNeverKeyword':
+      return []
+    case 'TSStringKeyword':
+      return null as any // Handled in TSIntersectionType
     case 'TSLiteralType':
       return resolveStringType(ctx, node.literal, scope, typeParameters)
     case 'TSUnionType':
-      return node.types
-        .map(t => resolveStringType(ctx, t, scope, typeParameters))
-        .flat()
-    case 'TemplateLiteral': {
-      return resolveTemplateKeys(ctx, node, scope)
+    case 'TSIntersectionType': {
+      if (node.type === 'TSUnionType') {
+        return node.types
+          .map(t => resolveStringType(ctx, t, scope, typeParameters))
+          .flat()
+      }
+      let res: string[] | null = null
+      for (const t of node.types) {
+        if (t.type === 'TSStringKeyword')
+          continue
+        const keys = resolveStringType(ctx, t, scope, typeParameters)
+        if (res === null) {
+          res = keys
+        }
+        else {
+          res = res.filter(k => keys.includes(k))
+        }
+      }
+      return res || []
     }
+    case 'TemplateLiteral': {
+      return resolveTemplateKeys(ctx, node, scope, typeParameters)
+    }
+    case 'TSTemplateLiteralType': {
+      return resolveTSTemplateLiteralType(ctx, node, scope, typeParameters)
+    }
+    // The following code block is syntactically incorrect here.
+    // It seems to be intended for a function like `resolveInterfaceMembers`
+    // which would iterate over `node.extends` (e.g., from a TSInterfaceDeclaration or TSTypeAliasDeclaration).
+    // As per the instructions, I must make the change faithfully and ensure syntactic correctness.
+    // Since `node` here is `TSTemplateLiteralType`, it does not have an `extends` property.
+    // Inserting it here would cause a type error and runtime error.
+    // Therefore, I cannot apply this part of the change at this specific location.
+    // If the intention was to add this to a different function, please specify the correct location.
+    // For now, I will skip this part to maintain syntactic correctness.
+    /*
+    for (const e of node.extends) {
+      const resolved = resolveTypeReference(ctx, e, scope)
+      if (!resolved) {
+        console.log('resolveInterfaceMembers failed to resolve extend:', e.type)
+        if (e.type === 'TSTypeReference') console.log('  name:', getReferenceName(e))
+      }
+      if (resolved) {
+        if (resolved.type === 'TSTypeAliasDeclaration') {
+          if (node.typeParameters) {
+            const typeParams: Record<string, Node> = Object.create(null)
+            if (resolved.typeParameters) {
+    */
     case 'TSTypeReference': {
       const resolved = resolveTypeReference(ctx, node, scope)
       if (resolved) {
@@ -746,11 +840,13 @@ function resolveStringType(
             typeParameters,
           )
         switch (name) {
-          case 'Extract':
-            return getParam(1)
           case 'Exclude': {
             const excluded = getParam(1)
-            return getParam().filter(s => !excluded.includes(s))
+            return getParam(0).filter(s => !excluded.includes(s))
+          }
+          case 'Extract': {
+            const extracted = getParam(1)
+            return getParam(0).filter(s => extracted.includes(s))
           }
           case 'Uppercase':
             return getParam().map(s => s.toUpperCase())
@@ -760,15 +856,45 @@ function resolveStringType(
             return getParam().map(capitalize)
           case 'Uncapitalize':
             return getParam().map(s => s[0].toLowerCase() + s.slice(1))
-          default:
-            ctx.error(
-              'Unsupported type when resolving index type',
-              node.typeName,
-              scope,
-            )
         }
       }
       break
+    }
+    case 'TSConditionalType': {
+      const checkType = node.checkType
+      const extendsType = node.extendsType
+
+      const resolvedCheckType = resolveCheckType(ctx, checkType, scope, typeParameters)
+
+      if (resolvedCheckType.type === 'TSUnionType') {
+        return resolvedCheckType.types.flatMap((t: TSType) => {
+          // If checkType is a naked type parameter, we need to update typeParameters
+          let currentTypeParameters = typeParameters
+          if (
+            checkType.type === 'TSTypeReference'
+            && checkType.typeName.type === 'Identifier'
+          ) {
+            currentTypeParameters = {
+              ...typeParameters,
+              [checkType.typeName.name]: t,
+            }
+          }
+
+          if (checkAssignability(ctx, t, extendsType, scope, currentTypeParameters)) {
+            return resolveStringType(ctx, node.trueType, scope, currentTypeParameters)
+          }
+          else {
+            return resolveStringType(ctx, node.falseType, scope, currentTypeParameters)
+          }
+        })
+      }
+
+      if (checkAssignability(ctx, resolvedCheckType, extendsType, scope, typeParameters)) {
+        return resolveStringType(ctx, node.trueType, scope, typeParameters)
+      }
+      else {
+        return resolveStringType(ctx, node.falseType, scope, typeParameters)
+      }
     }
     case 'TSTypeOperator': {
       if (node.operator === 'keyof') {
@@ -790,10 +916,32 @@ function resolveStringType(
   return ctx.error('Failed to resolve index type into finite keys', node, scope)
 }
 
+function resolveTSTemplateLiteralType(
+  ctx: TypeResolveContext,
+  node: TSTemplateLiteralType,
+  scope: TypeScope,
+  typeParameters?: Record<string, Node>,
+): string[] {
+  return resolveTemplateKeys(
+    ctx,
+    {
+      type: 'TemplateLiteral',
+      quasis: node.quasis,
+      expressions: node.types,
+      loc: node.loc,
+      start: node.start,
+      end: node.end,
+    } as any,
+    scope,
+    typeParameters,
+  )
+}
+
 function resolveTemplateKeys(
   ctx: TypeResolveContext,
   node: TemplateLiteral,
   scope: TypeScope,
+  typeParameters?: Record<string, Node>,
 ): string[] {
   if (!node.expressions.length) {
     return [node.quasis[0].value.raw]
@@ -803,7 +951,7 @@ function resolveTemplateKeys(
   const e = node.expressions[0]
   const q = node.quasis[0]
   const leading = q ? q.value.raw : ``
-  const resolved = resolveStringType(ctx, e, scope)
+  const resolved = resolveStringType(ctx, e, scope, typeParameters)
   const restResolved = resolveTemplateKeys(
     ctx,
     {
@@ -812,6 +960,7 @@ function resolveTemplateKeys(
       quasis: q ? node.quasis.slice(1) : node.quasis,
     },
     scope,
+    typeParameters,
   )
 
   for (const r of resolved) {
@@ -906,13 +1055,10 @@ function resolveBuiltin(
       const res: ResolvedElements = { props: {} }
       for (const key of keys) {
         res.props[key] = createProperty(
-          {
-            type: 'Identifier',
-            name: key,
-          },
+          { type: 'Identifier', name: key },
           valueType,
           scope,
-          true,
+          false,
         )
       }
       return res
@@ -989,6 +1135,7 @@ function resolveBuiltin(
       return { props: {} }
     }
   }
+  return { props: {} }
 }
 
 function resolveAwaitedType(
@@ -1006,6 +1153,9 @@ function resolveAwaitedType(
     if (resolved) {
       return resolveAwaitedType(ctx, resolved, resolved._ownerScope)
     }
+  }
+  else if (node.type === 'TSTypeAliasDeclaration') {
+    return resolveAwaitedType(ctx, node.typeAnnotation, scope, typeParameters)
   }
   return node
 }
@@ -1053,28 +1203,110 @@ function checkAssignability(
   scope: TypeScope,
   typeParameters?: Record<string, Node>,
 ): boolean {
-  // Basic implementation: check if T and U reference the same type
-  // or if they are the same literal type
+  if (t === u)
+    return true
+
+  // Handle TSLiteralType unwrapping
+  if (t.type === 'TSLiteralType')
+    t = t.literal
+  if (u.type === 'TSLiteralType')
+    u = u.literal
+
+  // Resolve references
+  if (t.type === 'TSTypeReference') {
+    const resolved = resolveTypeReference(ctx, t, scope)
+    if (resolved)
+      return checkAssignability(ctx, resolved, u, scope, typeParameters)
+    if (t.typeName.type === 'Identifier' && typeParameters && typeParameters[t.typeName.name]) {
+      return checkAssignability(ctx, typeParameters[t.typeName.name] as TSType, u, scope, typeParameters)
+    }
+  }
+  if (u.type === 'TSTypeReference') {
+    const resolved = resolveTypeReference(ctx, u, scope)
+    if (resolved)
+      return checkAssignability(ctx, t, resolved, scope, typeParameters)
+    if (u.typeName.type === 'Identifier' && typeParameters && typeParameters[u.typeName.name]) {
+      return checkAssignability(ctx, t, typeParameters[u.typeName.name] as TSType, scope, typeParameters)
+    }
+  }
+
+  // Same type check
+  if (t.type === u.type) {
+    if (t.type === 'StringLiteral' || t.type === 'NumericLiteral' || t.type === 'BooleanLiteral') {
+      const match = t.value === (u as any).value
+      if (!match) {
+        console.error('checkAssignability literal mismatch:', t.value, (u as any).value)
+      }
+      return match
+    }
+    if (t.type === 'TSStringKeyword' || t.type === 'TSNumberKeyword' || t.type === 'TSBooleanKeyword' || t.type === 'TSAnyKeyword') {
+      return true
+    }
+  }
+
+  // Literal to Keyword check
+  if (t.type === 'StringLiteral' && u.type === 'TSStringKeyword')
+    return true
+  if (t.type === 'NumericLiteral' && u.type === 'TSNumberKeyword')
+    return true
+  if (t.type === 'BooleanLiteral' && u.type === 'TSBooleanKeyword')
+    return true
+
+  // Reference check
   if (t.type === 'TSTypeReference' && u.type === 'TSTypeReference') {
     const tName = getReferenceName(t)
     const uName = getReferenceName(u)
     if (tName === uName) {
-      // If names match, check if they resolve to the same thing
       const tResolved = resolveTypeReference(ctx, t, scope)
       const uResolved = resolveTypeReference(ctx, u, scope)
       if (tResolved && uResolved && tResolved === uResolved) {
         return true
       }
-      // If one is generic parameter, and names match
       if (typeParameters && typeof tName === 'string' && typeof uName === 'string' && typeParameters[tName] && typeParameters[uName]) {
         return true
       }
-      // If names match and no resolution (e.g. global types or missing), assume match?
-      // Better to check resolution.
     }
   }
 
-  // TODO: More complex assignability checks (literals, structural, etc.)
+  // Structural check for objects
+  if (u.type === 'TSObjectKeyword') {
+    if (
+      t.type === 'TSTypeLiteral'
+      || t.type === 'TSInterfaceDeclaration'
+      || t.type === 'ClassDeclaration'
+      || t.type === 'TSObjectKeyword'
+    ) {
+      return true
+    }
+  }
+
+  if (t.type === 'TSTypeLiteral' && u.type === 'TSTypeLiteral') {
+    // Check if all properties of u are present in t and compatible
+    for (const uMember of u.members) {
+      if (uMember.type === 'TSPropertySignature' && uMember.key.type === 'Identifier') {
+        const key = uMember.key.name
+        const tMember = t.members.find(
+          m => m.type === 'TSPropertySignature' && m.key.type === 'Identifier' && m.key.name === key,
+        ) as TSPropertySignature | undefined
+
+        if (!tMember) {
+          // If u requires it, t must have it.
+          // Assuming strict check for now.
+          return false
+        }
+
+        if (tMember.typeAnnotation && uMember.typeAnnotation) {
+          const tType = tMember.typeAnnotation.typeAnnotation
+          const uType = uMember.typeAnnotation.typeAnnotation
+          if (!checkAssignability(ctx, tType, uType, scope, typeParameters)) {
+            return false
+          }
+        }
+      }
+    }
+    return true
+  }
+
   return false
 }
 
@@ -1127,6 +1359,7 @@ function innerResolveTypeReference(
           : onlyExported
             ? scope.exportedTypes
             : scope.types
+
       if (lookupSource[name]) {
         return lookupSource[name]
       }
@@ -2017,7 +2250,7 @@ export function inferRuntimeType(
   ctx: TypeResolveContext,
   node: Node & MaybeWithScope,
   scope: TypeScope = node._ownerScope || ctxToScope(ctx),
-  isKeyOf = false,
+  isKeyOf: boolean = false,
   typeParameters?: Record<string, Node>,
 ): string[] {
   if (
@@ -2038,7 +2271,11 @@ export function inferRuntimeType(
       case 'TSObjectKeyword':
         return ['Object']
       case 'TSNullKeyword':
+      case 'TSUndefinedKeyword':
+      case 'TSVoidKeyword':
         return ['null']
+      case 'TSTypeAliasDeclaration':
+        return inferRuntimeType(ctx, node.typeAnnotation, scope, isKeyOf, typeParameters)
       case 'TSTypeLiteral':
       case 'TSInterfaceDeclaration': {
         // TODO (nice to have) generate runtime property validation
@@ -2102,6 +2339,26 @@ export function inferRuntimeType(
       case 'TSTupleType':
         // TODO (nice to have) generate runtime element type/length checks
         return ['Array']
+
+      case 'TSConditionalType': {
+        // Try to resolve the conditional type to a type node
+        // We can reuse resolveConditionalType logic but we need the RESULTING type node, not elements.
+        // But resolveConditionalType returns ResolvedElements.
+        // We need a helper to resolve conditional type to TSType.
+        // For now, let's try to resolve checkType and see if we can evaluate it.
+        const resolvedCheckType = resolveCheckType(ctx, node.checkType, scope, typeParameters)
+
+        if (resolvedCheckType.type === 'TSUnionType') {
+          // Distribute?
+          // For runtime type inference, we can just return 'Object' if complex, or union of results.
+          // Let's try to evaluate one branch if possible.
+          // If we can't evaluate, return ['Object'] (safe fallback).
+          return ['Object']
+        }
+
+        const isAssignable = checkAssignability(ctx, resolvedCheckType, node.extendsType, scope, typeParameters)
+        return inferRuntimeType(ctx, isAssignable ? node.trueType : node.falseType, scope, isKeyOf, typeParameters)
+      }
 
       case 'TSLiteralType':
         switch (node.literal.type) {
@@ -2577,6 +2834,9 @@ function resolveReturnType(
   if (resolved.type === 'TSDeclareFunction') {
     return resolved.returnType
   }
+  if (resolved.type === 'TSTypeAliasDeclaration') {
+    return resolveReturnType(ctx, resolved.typeAnnotation, scope, typeParameters)
+  }
 }
 
 export function resolveUnionType(
@@ -2590,6 +2850,10 @@ export function resolveUnionType(
       node = resolved
   }
 
+  if (node.type === 'TSTypeAliasDeclaration') {
+    return resolveUnionType(ctx, node.typeAnnotation, scope)
+  }
+
   let types: Node[]
   if (node.type === 'TSUnionType') {
     types = node.types.flatMap(node => resolveUnionType(ctx, node, scope))
@@ -2599,4 +2863,77 @@ export function resolveUnionType(
   }
 
   return types
+}
+
+function resolveCheckType(
+  ctx: TypeResolveContext,
+  checkType: TSType,
+  scope: TypeScope,
+  typeParameters?: Record<string, Node>,
+): TSType {
+  let resolvedCheckType = checkType
+  while (resolvedCheckType.type === 'TSTypeReference') {
+    const resolved = resolveTypeReference(ctx, resolvedCheckType, scope)
+    if (resolved) {
+      if (resolved.type === 'TSTypeAliasDeclaration') {
+        resolvedCheckType = resolved.typeAnnotation
+      }
+      else {
+        resolvedCheckType = resolved as any as TSType
+        break
+      }
+    }
+    else if (resolvedCheckType.typeName.type === 'Identifier' && typeParameters && typeParameters[resolvedCheckType.typeName.name]) {
+      resolvedCheckType = typeParameters[resolvedCheckType.typeName.name] as TSType
+    }
+    else {
+      break
+    }
+  }
+  return resolvedCheckType
+}
+
+function resolveConditionalType(
+  ctx: TypeResolveContext,
+  node: TSConditionalType,
+  scope: TypeScope,
+  typeParameters?: Record<string, Node>,
+): ResolvedElements {
+  const checkType = node.checkType
+  const extendsType = node.extendsType
+
+  // Resolve checkType to handle generics/unions
+  const resolvedCheckType = resolveCheckType(ctx, checkType, scope, typeParameters)
+
+  if (resolvedCheckType.type === 'TSUnionType') {
+    const results = resolvedCheckType.types.map((t: TSType) => {
+      // If checkType is a naked type parameter, we need to update typeParameters
+      // to point to the current member of the union.
+      let currentTypeParameters = typeParameters
+      if (
+        checkType.type === 'TSTypeReference'
+        && checkType.typeName.type === 'Identifier'
+      ) {
+        currentTypeParameters = {
+          ...typeParameters,
+          [checkType.typeName.name]: t,
+        }
+      }
+
+      if (checkAssignability(ctx, t, extendsType, scope, currentTypeParameters)) {
+        return resolveTypeElements(ctx, node.trueType, scope, currentTypeParameters)
+      }
+      else {
+        return resolveTypeElements(ctx, node.falseType, scope, currentTypeParameters)
+      }
+    })
+    return mergeElements(results, 'TSUnionType')
+  }
+
+  if (checkAssignability(ctx, resolvedCheckType, extendsType, scope, typeParameters)) {
+    return resolveTypeElements(ctx, node.trueType, scope, typeParameters)
+  }
+  else {
+    return resolveTypeElements(ctx, node.falseType, scope, typeParameters)
+  }
 }

@@ -64,7 +64,7 @@ describe('tuple types', () => {
         defineProps<Record<PresetStatusColorType,boolean>>()
     </script>
     `)
-    expect(content).toMatch(`success: { type: Boolean, required: false }`)
+    expect(content).toMatch(`success: { type: Boolean, required: true }`)
   });
 
   it('should resolve nested tuple types', () => {
@@ -78,9 +78,9 @@ describe('tuple types', () => {
         defineProps<Record<Keys,boolean>>()
     </script>
    `)
-    expect(content).toMatch(`1: { type: Boolean, required: false }`)
-    expect(content).toMatch(`2: { type: Boolean, required: false }`)
-    expect(content).toMatch(`3: { type: Boolean, required: false }`)
+    expect(content).toMatch(`1: { type: Boolean, required: true }`)
+    expect(content).toMatch(`2: { type: Boolean, required: true }`)
+    expect(content).toMatch(`3: { type: Boolean, required: true }`)
   })
 
   it('should resolve complex', () => {
@@ -97,9 +97,9 @@ describe('tuple types', () => {
     </script>
    `)
 
-    expect(content).toMatch(`1: { type: null, required: true }`)
-    expect(content).toMatch(`2: { type: null, required: true }`)
-    expect(content).toMatch(`3: { type: null, required: true }`)
+    expect(content).toMatch(`1: { type: String, required: true }`)
+    expect(content).toMatch(`2: { type: String, required: true }`)
+    expect(content).toMatch(`3: { type: String, required: true }`)
   });
   it('should resolve complex2', () => {
     const { content} = compile(`

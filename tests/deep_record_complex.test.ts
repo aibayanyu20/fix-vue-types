@@ -20,9 +20,9 @@ describe('Deep Record and Utility Types', () => {
     </script>
     `)
     assertCode(content)
-    expect(content).toMatch(`getId: { type: Function, required: false }`)
-    expect(content).toMatch(`getName: { type: Function, required: false }`)
-    expect(content).toMatch(`getEmail: { type: Function, required: false }`)
+    expect(content).toMatch(`getId: { type: Function, required: true }`)
+    expect(content).toMatch(`getName: { type: Function, required: true }`)
+    expect(content).toMatch(`getEmail: { type: Function, required: true }`)
     expect(bindings).toMatchObject({
       getId: BindingTypes.PROPS,
       getName: BindingTypes.PROPS,
@@ -44,8 +44,8 @@ describe('Deep Record and Utility Types', () => {
     </script>
     `)
     assertCode(content)
-    expect(content).toMatch(`HOST: { type: String, required: false }`)
-    expect(content).toMatch(`PORT: { type: String, required: false }`)
+    expect(content).toMatch(`HOST: { type: String, required: true }`)
+    expect(content).toMatch(`PORT: { type: String, required: true }`)
     expect(content).not.toMatch(`DEBUG`)
     expect(bindings).toMatchObject({
       HOST: BindingTypes.PROPS,

@@ -22,8 +22,8 @@ describe('Record types', () => {
     </script>
     `)
     assertCode(content)
-    expect(content).toMatch(`foo: { type: Number, required: false }`)
-    expect(content).toMatch(`bar: { type: Number, required: false }`)
+    expect(content).toMatch(`foo: { type: Number, required: true }`)
+    expect(content).toMatch(`bar: { type: Number, required: true }`)
     expect(bindings).toMatchObject({
       foo: BindingTypes.PROPS,
       bar: BindingTypes.PROPS,
@@ -41,8 +41,8 @@ describe('Record types', () => {
     </script>
     `)
     assertCode(content)
-    expect(content).toMatch(`a: { type: Boolean, required: false }`)
-    expect(content).toMatch(`b: { type: Boolean, required: false }`)
+    expect(content).toMatch(`a: { type: Boolean, required: true }`)
+    expect(content).toMatch(`b: { type: Boolean, required: true }`)
     expect(bindings).toMatchObject({
       a: BindingTypes.PROPS,
       b: BindingTypes.PROPS,
@@ -60,7 +60,7 @@ describe('Record types', () => {
     `)
     assertCode(content)
     // Should have type: null (any)
-    expect(content).toMatch(`a: { type: null, required: false }`)
+    expect(content).toMatch(`a: { required: true }`)
     expect(bindings).toMatchObject({
       a: BindingTypes.PROPS,
     })

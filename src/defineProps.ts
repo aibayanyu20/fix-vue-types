@@ -133,8 +133,9 @@ function genRuntimePropFromType(
 
   const finalKey = getEscapedPropName(key)
   if (!ctx.options.isProd) {
+    const isNullType = type.length === 1 && type[0] === 'null'
     return `${finalKey}: { ${concatStrings([
-      `type: ${toRuntimeTypeString(type)}`,
+      !isNullType && `type: ${toRuntimeTypeString(type)}`,
       `required: ${required}`,
       skipCheck && 'skipCheck: true',
       defaultString,
