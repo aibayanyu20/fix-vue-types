@@ -990,7 +990,13 @@ function resolveBuiltin(
 
   switch (name) {
     case 'Partial': {
-      const t = resolveT()
+      let t: ResolvedElements
+      try {
+        t = resolveT()
+      }
+      catch (e) {
+        return { props: {} }
+      }
       const res: ResolvedElements = { props: {}, calls: t.calls }
       Object.keys(t.props).forEach((key) => {
         res.props[key] = { ...t.props[key], optional: true }
@@ -998,7 +1004,13 @@ function resolveBuiltin(
       return res
     }
     case 'Required': {
-      const t = resolveT()
+      let t: ResolvedElements
+      try {
+        t = resolveT()
+      }
+      catch (e) {
+        return { props: {} }
+      }
       const res: ResolvedElements = { props: {}, calls: t.calls }
       Object.keys(t.props).forEach((key) => {
         res.props[key] = { ...t.props[key], optional: false }
@@ -1006,9 +1018,20 @@ function resolveBuiltin(
       return res
     }
     case 'Readonly':
-      return resolveT()
+      try {
+        return resolveT()
+      }
+      catch (e) {
+        return { props: {} }
+      }
     case 'Pick': {
-      const t = resolveT()
+      let t: ResolvedElements
+      try {
+        t = resolveT()
+      }
+      catch (e) {
+        return { props: {} }
+      }
       const picked = resolveStringType(
         ctx,
         node.typeParameters!.params[1],
@@ -1022,7 +1045,13 @@ function resolveBuiltin(
       return res
     }
     case 'Omit': {
-      const t = resolveT()
+      let t: ResolvedElements
+      try {
+        t = resolveT()
+      }
+      catch (e) {
+        return { props: {} }
+      }
       const omitted = resolveStringType(
         ctx,
         node.typeParameters!.params[1],

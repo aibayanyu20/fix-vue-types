@@ -45,6 +45,9 @@ importers:
       '@types/node':
         specifier: ^24.10.1
         version: 24.10.1
+      '@v-c/select':
+        specifier: ^0.0.1
+        version: 0.0.1(vue@3.5.25(typescript@5.9.3))
       '@vitejs/plugin-vue':
         specifier: ^6.0.1
         version: 6.0.2(rolldown-vite@7.2.5(@types/node@24.10.1)(jiti@2.6.1)(yaml@2.8.2))(vue@3.5.25(typescript@5.9.3))
@@ -656,6 +659,41 @@ packages:
   '@typescript-eslint/visitor-keys@8.48.1':
     resolution: {integrity: sha512-BmxxndzEWhE4TIEEMBs8lP3MBWN3jFPs/p6gPm/wkv02o41hI6cq9AuSmGAaTTHPtA1FTi2jBre4A9rm5ZmX+Q==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@v-c/overflow@1.0.0':
+    resolution: {integrity: sha512-p1jth05Tc8/FHsY5SKhaWSNNRg9gXSzuviKf8lMxk++eepFh8r/BOVv2ynumy6HMFkXlU12s08Zy6tztv7NwLQ==}
+    peerDependencies:
+      vue: ^3.0.0
+
+  '@v-c/portal@1.0.0':
+    resolution: {integrity: sha512-Cc9Pcg9PMulQ66sRqdD+OUli0scDX4SO0Jadol69/T4BfDU1KSFPrOjWi7Dx1g5UX8JqscnFBIpg9gu+BUBeUg==}
+    peerDependencies:
+      vue: ^3.0.0
+
+  '@v-c/resize-observer@1.0.0':
+    resolution: {integrity: sha512-2gTxvnEpNimzufFgaMXuLyvPoKPnL1wEgphxNi65AtJxegWCu5NVw/N3DzJEHtwaEYQwVlhWagt6kbGtkyKQfQ==}
+    peerDependencies:
+      vue: ^3.0.0
+
+  '@v-c/select@0.0.1':
+    resolution: {integrity: sha512-PLosS232tj4+QmUCN7uUId0K4n79HzPxcYavbjEO1OORc3hqfMhjfQBfWx/goLY44hAoFxU6uXek1dfQaLso+Q==}
+    peerDependencies:
+      vue: ^3.0.0
+
+  '@v-c/trigger@1.0.1':
+    resolution: {integrity: sha512-VbkYCcl6O3tp08sWsBAxXs4kEnE98zF7IRETCHv3jHFEVzluLH1Wj5AAjw+D6HHCTBj+sx3VQWRPeHLGzxGZrw==}
+    peerDependencies:
+      vue: ^3.0.0
+
+  '@v-c/util@1.0.1':
+    resolution: {integrity: sha512-YvSTY500qst//lTQa4c9z0BRFVkn9Yu0ktPb6aoIMselF7MrS7S21b6cS5TUxTf6uNIpivv4MZZN/WUguzyl4Q==}
+    peerDependencies:
+      vue: ^3.0.0
+
+  '@v-c/virtual-list@1.0.0':
+    resolution: {integrity: sha512-kZ7KYSKYQ+6Bd6nN/BJvwfj5oydBN6iSKa6AUBPLOUK7cT6qe89bVE0vcgvCOB6msxECZ4SCAR/O9oFPq/L1Gg==}
+    peerDependencies:
+      vue: ^3.0.0
 
   '@vitejs/plugin-vue@6.0.2':
     resolution: {integrity: sha512-iHmwV3QcVGGvSC1BG5bZ4z6iwa1SOpAPWmnjOErd4Ske+lZua5K9TtAVdx0gMBClJ28DViCbSmZitjWZsWO3LA==}
@@ -2872,6 +2910,48 @@ snapshots:
     dependencies:
       '@typescript-eslint/types': 8.48.1
       eslint-visitor-keys: 4.2.1
+
+  '@v-c/overflow@1.0.0(vue@3.5.25(typescript@5.9.3))':
+    dependencies:
+      '@v-c/resize-observer': 1.0.0(vue@3.5.25(typescript@5.9.3))
+      '@v-c/util': 1.0.1(vue@3.5.25(typescript@5.9.3))
+      vue: 3.5.25(typescript@5.9.3)
+
+  '@v-c/portal@1.0.0(vue@3.5.25(typescript@5.9.3))':
+    dependencies:
+      '@v-c/util': 1.0.1(vue@3.5.25(typescript@5.9.3))
+      vue: 3.5.25(typescript@5.9.3)
+
+  '@v-c/resize-observer@1.0.0(vue@3.5.25(typescript@5.9.3))':
+    dependencies:
+      '@v-c/util': 1.0.1(vue@3.5.25(typescript@5.9.3))
+      resize-observer-polyfill: 1.5.1
+      vue: 3.5.25(typescript@5.9.3)
+
+  '@v-c/select@0.0.1(vue@3.5.25(typescript@5.9.3))':
+    dependencies:
+      '@v-c/overflow': 1.0.0(vue@3.5.25(typescript@5.9.3))
+      '@v-c/trigger': 1.0.1(vue@3.5.25(typescript@5.9.3))
+      '@v-c/util': 1.0.1(vue@3.5.25(typescript@5.9.3))
+      '@v-c/virtual-list': 1.0.0(vue@3.5.25(typescript@5.9.3))
+      vue: 3.5.25(typescript@5.9.3)
+
+  '@v-c/trigger@1.0.1(vue@3.5.25(typescript@5.9.3))':
+    dependencies:
+      '@v-c/portal': 1.0.0(vue@3.5.25(typescript@5.9.3))
+      '@v-c/resize-observer': 1.0.0(vue@3.5.25(typescript@5.9.3))
+      '@v-c/util': 1.0.1(vue@3.5.25(typescript@5.9.3))
+      vue: 3.5.25(typescript@5.9.3)
+
+  '@v-c/util@1.0.1(vue@3.5.25(typescript@5.9.3))':
+    dependencies:
+      vue: 3.5.25(typescript@5.9.3)
+
+  '@v-c/virtual-list@1.0.0(vue@3.5.25(typescript@5.9.3))':
+    dependencies:
+      '@v-c/resize-observer': 1.0.0(vue@3.5.25(typescript@5.9.3))
+      '@v-c/util': 1.0.1(vue@3.5.25(typescript@5.9.3))
+      vue: 3.5.25(typescript@5.9.3)
 
   '@vitejs/plugin-vue@6.0.2(rolldown-vite@7.2.5(@types/node@24.10.1)(jiti@2.6.1)(yaml@2.8.2))(vue@3.5.25(typescript@5.9.3))':
     dependencies:
