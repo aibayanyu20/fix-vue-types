@@ -1,7 +1,7 @@
 import type { CallExpression, Node, ObjectExpression } from '../src/ast'
 import * as fs from 'node:fs'
 import { BindingTypes } from '@vue/compiler-core'
-import { walk } from 'estree-walker'
+import { walk } from 'oxc-walker'
 import ts from 'typescript'
 import { parse } from 'vue/compiler-sfc'
 import { extractRuntimeEmits, extractRuntimeProps, ScriptCompileContext } from '../src'
@@ -194,7 +194,7 @@ export function assertCode(content: string) {
 function getObjectOrArrayExpressionKeys(value: Node): string[] {
   if (value.type === 'ArrayExpression') {
     return value.elements
-      .map((element) => {
+      .map((element: Node) => {
         if (!element || element.type !== 'StringLiteral')
           return ''
         return element.value
@@ -203,7 +203,7 @@ function getObjectOrArrayExpressionKeys(value: Node): string[] {
   }
   if (value.type === 'ObjectExpression') {
     return value.properties
-      .map((prop) => {
+      .map((prop: Node) => {
         if (
           prop.type === 'ObjectProperty'
           || prop.type === 'ObjectMethod'
@@ -212,7 +212,7 @@ function getObjectOrArrayExpressionKeys(value: Node): string[] {
         }
         return ''
       })
-      .filter((k): k is string => !!k)
+      .filter((k: string): k is string => !!k)
   }
   return []
 }

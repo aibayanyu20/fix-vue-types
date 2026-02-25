@@ -48,18 +48,18 @@
     "antdv-next": "^1.0.5",
     "bumpp": "^10.3.2",
     "eslint": "^9.39.1",
-    "estree-walker": "^3.0.3",
     "jiti": "^2.6.1",
     "jsdom": "^27.2.0",
-    "tsdown": "0.17.0-beta.5",
+    "oxc-walker": "^0.7.0",
+    "tsdown": "^0.20.3",
     "typescript": "~5.9.3",
-    "vite": "npm:rolldown-vite@7.2.5",
+    "vite": "8.0.0-beta.15",
     "vitest": "^4.0.15",
     "vue-tsc": "^3.1.4"
   },
   "pnpm": {
     "overrides": {
-      "vite": "npm:rolldown-vite@7.2.5"
+      "vite": "8.0.0-beta.15"
     }
   }
 }

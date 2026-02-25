@@ -5,4 +5,10 @@ export default defineConfig({
   dts: true,
   format: ['esm', 'cjs'],
   tsconfig: './tsconfig.app.json',
+  outExtensions() {
+    return {
+      dts: '.d.ts',
+      js: '.js',
+    }
+  },
 })
