@@ -39,6 +39,30 @@ export const Inline2 = defineComponent({
 })
 `
 
+const omitBuiltinFixture = `
+import { defineComponent } from 'vue'
+
+type Key = string | number
+
+interface SeparatorType {
+  key?: Key
+}
+
+interface Props extends SeparatorType {
+  label?: string
+  showArrow?: boolean
+}
+
+export default defineComponent<Omit<Props, 'key'>>(
+  (props) => {
+    return () => <div>{props.label}</div>
+  },
+  {
+    name: 'X',
+  },
+)
+`
+
 function createExternalCtx(source: string, filename: string): TypeResolveContext & Record<string, any> {
   const { program, errors } = parseSync(filename, source, {
     lang: filename.endsWith('.tsx') ? 'tsx' : 'ts',
@@ -138,5 +162,18 @@ describe('base extractRuntime* with external OXC context', () => {
     const emits = extractRuntimeEmits(ctx)
 
     expect(Array.from(emits).sort()).toEqual(['change', 'click'])
+  })
+
+  it('extractRuntimeProps handles OXC typeArguments for builtins like Omit', () => {
+    const ctx = createExternalCtx(omitBuiltinFixture, path.resolve(process.cwd(), 'tests/fixtures/repro-omit-builtin.tsx'))
+    const call = findCall(ctx.program, 'defineComponent')
+
+    ctx.propsTypeDecl = call.typeArguments.params[0]
+
+    const code = extractRuntimeProps(ctx)
+
+    expect(code).toContain('label')
+    expect(code).toContain('showArrow')
+    expect(code).not.toContain('key:')
   })
 })

@@ -302,6 +302,17 @@ function innerResolveTypeElements(
     }
     case 'TSConditionalType':
       return resolveConditionalType(ctx, node, scope, typeParameters)
+    case 'TSInterfaceHeritage':
+      return resolveTypeElements(
+        ctx,
+        {
+          ...node,
+          type: 'TSExpressionWithTypeArguments',
+          typeParameters: (node as any).typeParameters ?? (node as any).typeArguments ?? null,
+        } as any,
+        scope,
+        typeParameters,
+      )
     case 'TSExpressionWithTypeArguments': // referenced by interface extends
     case 'TSTypeReference': {
       const typeName = getReferenceName(node)
@@ -732,6 +743,10 @@ function resolveStringType(
   typeParameters?: Record<string, Node>,
 ): string[] {
   switch (node.type) {
+    case 'Literal':
+      if (typeof node.value === 'string' || typeof node.value === 'number')
+        return [String(node.value)]
+      break
     case 'StringLiteral':
       return [node.value]
     case 'NumericLiteral':
@@ -979,9 +994,10 @@ function resolveBuiltin(
   scope: TypeScope,
   typeParameters?: Record<string, Node>,
 ): ResolvedElements {
+  const typeParamNodes = ((node as any).typeParameters ?? (node as any).typeArguments)?.params as Node[] | undefined
   const resolveT = () => resolveTypeElements(
     ctx,
-    node.typeParameters!.params[0],
+    typeParamNodes![0],
     scope,
     typeParameters,
   )
@@ -1032,7 +1048,7 @@ function resolveBuiltin(
       }
       const picked = resolveStringType(
         ctx,
-        node.typeParameters!.params[1],
+        typeParamNodes![1],
         scope,
         typeParameters,
       )
@@ -1052,7 +1068,7 @@ function resolveBuiltin(
       }
       const omitted = resolveStringType(
         ctx,
-        node.typeParameters!.params[1],
+        typeParamNodes![1],
         scope,
         typeParameters,
       )
@@ -1065,8 +1081,8 @@ function resolveBuiltin(
       return res
     }
     case 'Record': {
-      const keysParam = node.typeParameters!.params[0]
-      const valueType = node.typeParameters!.params[1]
+      const keysParam = typeParamNodes![0]
+      const valueType = typeParamNodes![1]
 
       if (keysParam.type === 'TSStringKeyword') {
         return { props: {} }
@@ -1092,8 +1108,8 @@ function resolveBuiltin(
     }
     case 'Extract':
     case 'Exclude': {
-      const t = node.typeParameters!.params[0]
-      const u = node.typeParameters!.params[1]
+      const t = typeParamNodes![0]
+      const u = typeParamNodes![1]
       const members = resolveUnionMembers(ctx, t, scope, typeParameters)
       const filtered: Node[] = []
       for (const member of members) {
@@ -1108,7 +1124,7 @@ function resolveBuiltin(
       )
     }
     case 'InstanceType': {
-      const t = node.typeParameters!.params[0]
+      const t = typeParamNodes![0]
       if (t.type !== 'TSTypeReference' && t.type !== 'TSImportType' && t.type !== 'TSExpressionWithTypeArguments' && t.type !== 'TSTypeQuery') {
         return { props: {} }
       }
@@ -1122,7 +1138,7 @@ function resolveBuiltin(
       return { props: {} }
     }
     case 'Awaited': {
-      const t = node.typeParameters!.params[0]
+      const t = typeParamNodes![0]
       const unwrapped = resolveAwaitedType(ctx, t, scope, typeParameters)
       return resolveTypeElements(ctx, unwrapped, scope, typeParameters)
     }
