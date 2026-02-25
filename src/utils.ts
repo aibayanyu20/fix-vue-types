@@ -92,7 +92,7 @@ export function getStringLiteralKey(
 ): string | null {
   return node.computed
     ? node.key.type === 'TemplateLiteral' && !node.key.expressions.length
-      ? node.key.quasis.map(q => q.value.cooked).join('')
+      ? node.key.quasis.map((q: any) => q.value.cooked).join('')
       : null
     : node.key.type === 'Identifier'
       ? node.key.name

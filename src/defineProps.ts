@@ -113,7 +113,7 @@ function genRuntimePropFromType(
   }
   else if (hasStaticDefaults) {
     const prop = (ctx.propsRuntimeDefaults as ObjectExpression).properties.find(
-      (node) => {
+      (node: Node) => {
         if (node.type === 'SpreadElement')
           return false
         return resolveObjectKey(node.key, node.computed) === key
@@ -184,7 +184,7 @@ function hasStaticWithDefaults(ctx: TypeResolveContext) {
     ctx.propsRuntimeDefaults
     && ctx.propsRuntimeDefaults.type === 'ObjectExpression'
     && ctx.propsRuntimeDefaults.properties.every(
-      node =>
+      (node: Node) =>
         node.type !== 'SpreadElement'
         && (!node.computed || node.key.type.endsWith('Literal')),
     )

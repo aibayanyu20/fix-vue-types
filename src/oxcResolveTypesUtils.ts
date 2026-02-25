@@ -1,5 +1,5 @@
-import path from 'node:path'
 import type { AnyNode } from './oxcResolveTypesTypes'
+import path from 'node:path'
 
 const normalizePathImpl = (path.posix || path).normalize
 const windowsSlashRE = /\\/g
@@ -44,8 +44,6 @@ export function getIdentifierName(node: AnyNode | null | undefined): string | un
   if (node.type === 'Literal' && (typeof node.value === 'string' || typeof node.value === 'number')) {
     return String(node.value)
   }
-
-  return
 }
 
 export function getQualifiedNameParts(node: AnyNode | null | undefined): string[] {
@@ -86,8 +84,6 @@ export function getObjectKey(
   if (key.type === 'TemplateLiteral' && !key.expressions?.length) {
     return (key.quasis || []).map((quasi: AnyNode) => quasi.value?.cooked ?? quasi.value?.raw ?? '').join('')
   }
-
-  return
 }
 
 export function unwrapTypeNode(node: AnyNode | null | undefined): AnyNode | undefined {
@@ -127,7 +123,7 @@ export function resolveRelativeImportCandidates(
 ): string[] {
   const base = path.dirname(importerFilename)
   const resolved = normalizePath(path.resolve(base, source))
-  const hasJsExt = /\.(mjs|cjs|js)$/i.test(resolved)
+  const hasJsExt = /\.(?:mjs|cjs|js)$/i.test(resolved)
   const resolvedWithoutJsExt = hasJsExt
     ? resolved.replace(/\.(mjs|cjs|js)$/i, '')
     : resolved

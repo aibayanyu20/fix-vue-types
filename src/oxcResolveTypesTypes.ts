@@ -1,6 +1,6 @@
 import type { TsModule } from './types'
 
-export type AnyNode = {
+export interface AnyNode {
   type: string
   start?: number
   end?: number

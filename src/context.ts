@@ -1,6 +1,6 @@
-import type { CallExpression, Node, ObjectPattern, Program } from './ast'
 import type { BindingMetadata } from '@vue/compiler-core'
 import type { SFCDescriptor } from 'vue/compiler-sfc'
+import type { CallExpression, Node, ObjectPattern, Program } from './ast'
 import type { PropsDestructureBindings } from './defineProps'
 import type { TypeScope } from './resolveType'
 import type { ImportBinding, SFCScriptCompileOptions } from './types'

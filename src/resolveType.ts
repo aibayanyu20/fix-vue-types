@@ -1,3 +1,4 @@
+import type TS from 'typescript'
 import type {
   ClassDeclaration,
   Expression,
@@ -28,7 +29,6 @@ import type {
   TSTypeQuery,
   TSTypeReference,
 } from './ast'
-import type TS from 'typescript'
 import type { ScriptCompileContext } from './context'
 import type { ImportBinding, SFCScriptCompileOptions } from './types'
 import { realpathSync } from 'node:fs'
@@ -274,7 +274,7 @@ function innerResolveTypeElements(
     }
     case 'TSTupleType': {
       const res: ResolvedElements = { props: {} }
-      node.elementTypes.forEach((type, index) => {
+      node.elementTypes.forEach((type: Node, index: number) => {
         const elementType = type.type === 'TSNamedTupleMember' ? type.elementType : type
         res.props[String(index)] = createProperty(
           { type: 'NumericLiteral', value: index },
@@ -288,7 +288,7 @@ function innerResolveTypeElements(
     case 'TSUnionType':
     case 'TSIntersectionType':
       return mergeElements(
-        node.types.map(t => resolveTypeElements(ctx, t, scope, typeParameters)),
+        node.types.map((t: Node) => resolveTypeElements(ctx, t, scope, typeParameters)),
         node.type,
       )
     case 'TSMappedType':
@@ -333,11 +333,11 @@ function innerResolveTypeElements(
           && node.typeParameters
         ) {
           typeParams = Object.create(null)
-          resolved.typeParameters.params.forEach((p, i) => {
+          resolved.typeParameters.params.forEach((p: Node, i: number) => {
             let param = typeParameters && typeParameters[p.name]
             if (!param)
               param = node.typeParameters!.params[i]
-            typeParams![p.name] = param
+            typeParams![p.name] = param as Node
           })
         }
         return resolveTypeElements(
@@ -489,7 +489,6 @@ function mergeElements(
           baseProps[key].key,
           {
             type,
-            // @ts-expect-error: types property is missing in TSTypeAnnotation
             types: [baseProps[key], props[key]],
           },
           baseProps[key]._ownerScope,
@@ -671,7 +670,7 @@ function resolveArrayElementType(
   }
   // tuple
   if (node.type === 'TSTupleType') {
-    return node.elementTypes.map(t =>
+    return node.elementTypes.map((t: Node) =>
       t.type === 'TSNamedTupleMember' ? t.elementType : t,
     )
   }
@@ -701,7 +700,7 @@ function resolveArrayElementType(
     return resolveArrayElementType(ctx, node.typeAnnotation, scope, typeParameters)
   }
   if (node.type === 'ArrayExpression') {
-    return node.elements.map(e =>
+    return node.elements.map((e: Node) =>
       e ? inferTypeFromExpression(ctx, e, scope) : { type: 'TSAnyKeyword' },
     )
   }
@@ -714,7 +713,7 @@ function resolveArrayElementType(
       init = init.expression
     }
     if (init.type === 'ArrayExpression') {
-      return init.elements.map(e =>
+      return init.elements.map((e: Node) =>
         e ? inferTypeFromExpression(ctx, e, scope) : { type: 'TSAnyKeyword' },
       )
     }
@@ -749,7 +748,7 @@ function resolveStringType(
     case 'TSIntersectionType': {
       if (node.type === 'TSUnionType') {
         return node.types
-          .map(t => resolveStringType(ctx, t, scope, typeParameters))
+          .map((t: Node) => resolveStringType(ctx, t, scope, typeParameters))
           .flat()
       }
       let res: string[] | null = null
@@ -801,7 +800,7 @@ function resolveStringType(
           if (node.typeParameters) {
             const typeParams: Record<string, Node> = Object.create(null)
             if (resolved.typeParameters) {
-              resolved.typeParameters.params.forEach((p, i) => {
+              resolved.typeParameters.params.forEach((p: Node, i: number) => {
                 typeParams![p.name] = node.typeParameters!.params[i]
               })
             }
@@ -993,7 +992,7 @@ function resolveBuiltin(
       try {
         t = resolveT()
       }
-      catch (e) {
+      catch {
         return { props: {} }
       }
       const res: ResolvedElements = { props: {}, calls: t.calls }
@@ -1007,7 +1006,7 @@ function resolveBuiltin(
       try {
         t = resolveT()
       }
-      catch (e) {
+      catch {
         return { props: {} }
       }
       const res: ResolvedElements = { props: {}, calls: t.calls }
@@ -1020,7 +1019,7 @@ function resolveBuiltin(
       try {
         return resolveT()
       }
-      catch (e) {
+      catch {
         return { props: {} }
       }
     case 'Pick': {
@@ -1028,7 +1027,7 @@ function resolveBuiltin(
       try {
         t = resolveT()
       }
-      catch (e) {
+      catch {
         return { props: {} }
       }
       const picked = resolveStringType(
@@ -1048,7 +1047,7 @@ function resolveBuiltin(
       try {
         t = resolveT()
       }
-      catch (e) {
+      catch {
         return { props: {} }
       }
       const omitted = resolveStringType(
@@ -1196,7 +1195,7 @@ function resolveUnionMembers(
 ): Node[] {
   switch (node.type) {
     case 'TSUnionType':
-      return node.types.flatMap(t => resolveUnionMembers(ctx, t, scope, typeParameters))
+      return node.types.flatMap((t: Node) => resolveUnionMembers(ctx, t, scope, typeParameters))
     case 'TSTypeReference': {
       const resolved = resolveTypeReference(ctx, node, scope)
       if (resolved) {
@@ -1314,7 +1313,7 @@ function checkAssignability(
       if (uMember.type === 'TSPropertySignature' && uMember.key.type === 'Identifier') {
         const key = uMember.key.name
         const tMember = t.members.find(
-          m => m.type === 'TSPropertySignature' && m.key.type === 'Identifier' && m.key.name === key,
+          (m: Node) => m.type === 'TSPropertySignature' && m.key.type === 'Identifier' && m.key.name === key,
         ) as TSPropertySignature | undefined
 
         if (!tMember) {
@@ -1661,7 +1660,7 @@ function inferTypeFromExpression(
       return {
         type: 'TSTypeLiteral',
         members: node.properties
-          .map((p) => {
+          .map((p: Node) => {
             if (p.type === 'ObjectProperty' && p.key.type === 'Identifier') {
               return createProperty(
                 p.key,
@@ -1677,7 +1676,7 @@ function inferTypeFromExpression(
     case 'ArrayExpression':
       return {
         type: 'TSTupleType',
-        elementTypes: node.elements.map(e =>
+        elementTypes: node.elements.map((e: Node) =>
           e ? inferTypeFromExpression(ctx, e, scope) : { type: 'TSAnyKeyword' },
         ),
       }
@@ -2402,7 +2401,7 @@ export function inferRuntimeType(
             if (node.typeParameters) {
               const typeParams: Record<string, Node> = Object.create(null)
               if (resolved.typeParameters) {
-                resolved.typeParameters.params.forEach((p, i) => {
+                resolved.typeParameters.params.forEach((p: Node, i: number) => {
                   typeParams![p.name] = node.typeParameters!.params[i]
                 })
               }
@@ -2814,7 +2813,7 @@ function ctorToType(ctorType: string): TSType {
 
 function findStaticPropertyType(node: TSTypeLiteral, key: string) {
   const prop = node.members.find(
-    m =>
+    (m: Node) =>
       m.type === 'TSPropertySignature'
       && getStringLiteralKey(m) === key
       && m.typeAnnotation,
@@ -2871,7 +2870,7 @@ export function resolveUnionType(
 
   let types: Node[]
   if (node.type === 'TSUnionType') {
-    types = node.types.flatMap(node => resolveUnionType(ctx, node, scope))
+    types = node.types.flatMap((node: Node) => resolveUnionType(ctx, node, scope))
   }
   else {
     types = [node]

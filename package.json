@@ -45,6 +45,7 @@
     "@vitejs/plugin-vue": "^6.0.1",
     "@vue/tsconfig": "^0.8.1",
     "ant-design-vue": "^4.2.6",
+    "antdv-next": "^1.0.5",
     "bumpp": "^10.3.2",
     "eslint": "^9.39.1",
     "estree-walker": "^3.0.3",

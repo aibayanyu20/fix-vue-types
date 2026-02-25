@@ -22,6 +22,6 @@ try {
   if (result.errors.length)
     throw new Error(result.errors[0]!.message)
   console.log("Parse successful")
-} catch (e) {
+} catch (e: any) {
   console.error("Parse failed:", e.message)
 }

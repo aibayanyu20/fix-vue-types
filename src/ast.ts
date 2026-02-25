@@ -1,13 +1,13 @@
-export type AnyNode = {
+export interface AnyNode {
   type: string
   start?: number
   end?: number
-  leadingComments?: Array<{ type?: string; value: string; start?: number; end?: number }>
+  leadingComments?: Array<{ type?: string, value: string, start?: number, end?: number }>
   [key: string]: any
 }
 
 export type Node = AnyNode
-export type Program = AnyNode & { body: AnyNode[]; sourceType?: string }
+export type Program = AnyNode & { body: AnyNode[], sourceType?: string }
 export type Statement = AnyNode
 export type Expression = AnyNode
 export type TemplateLiteral = AnyNode
