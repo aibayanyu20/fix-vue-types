@@ -63,6 +63,28 @@ export default defineComponent<Omit<Props, 'key'>>(
 )
 `
 
+const nestedImportOmitFixture = `
+import { defineComponent } from 'vue'
+
+interface ColumnType<RecordType = Record<string, any>>
+  extends Omit<import('./oxc-import-omit-base').BaseColumnType<RecordType>, 'title'> {
+  onFilterDropdownOpenChange?: (visible: boolean) => void
+}
+
+interface ColumnProps<RecordType = Record<string, any>> extends ColumnType<RecordType> {
+  children?: null
+}
+
+export default defineComponent<ColumnProps>(
+  () => {
+    return () => <div />
+  },
+  {
+    name: 'ATableColumn',
+  },
+)
+`
+
 function createExternalCtx(source: string, filename: string): TypeResolveContext & Record<string, any> {
   const { program, errors } = parseSync(filename, source, {
     lang: filename.endsWith('.tsx') ? 'tsx' : 'ts',
@@ -175,5 +197,22 @@ describe('base extractRuntime* with external OXC context', () => {
     expect(code).toContain('label')
     expect(code).toContain('showArrow')
     expect(code).not.toContain('key:')
+  })
+
+  it('extractRuntimeProps handles nested interface extends Omit<import(...), ...> with OXC nodes', () => {
+    const filename = path.resolve(process.cwd(), 'tests/fixtures/repro-nested-import-omit.tsx')
+    const ctx = createExternalCtx(nestedImportOmitFixture, filename)
+    const call = findCall(ctx.program, 'defineComponent')
+
+    ctx.propsTypeDecl = call.typeArguments.params[0]
+
+    const code = extractRuntimeProps(ctx)
+
+    expect(code).toContain('onFilterDropdownOpenChange')
+    expect(code).toContain('colSpan')
+    expect(code).toContain('width')
+    expect(code).toContain('rowScope')
+    expect(code).toContain('render')
+    expect(code).not.toContain('title:')
   })
 })

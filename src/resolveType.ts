@@ -315,17 +315,18 @@ function innerResolveTypeElements(
       )
     case 'TSExpressionWithTypeArguments': // referenced by interface extends
     case 'TSTypeReference': {
+      const nodeTypeParams = getTypeParamInstantiation(node)
       const typeName = getReferenceName(node)
       if (
         (typeName === 'ExtractPropTypes'
           || typeName === 'ExtractPublicPropTypes')
-        && node.typeParameters
+        && nodeTypeParams
         && scope.imports[typeName]?.source === 'vue'
       ) {
         return resolveExtractPropTypes(
           resolveTypeElements(
             ctx,
-            node.typeParameters.params[0],
+            nodeTypeParams.params[0],
             scope,
             typeParameters,
           ),
@@ -341,13 +342,13 @@ function innerResolveTypeElements(
             || resolved.type === 'ClassDeclaration')
           && resolved.typeParameters
           && resolved.typeParameters.type !== 'Noop'
-          && node.typeParameters
+          && nodeTypeParams
         ) {
           typeParams = Object.create(null)
           resolved.typeParameters.params.forEach((p: Node, i: number) => {
             let param = typeParameters && typeParameters[p.name]
             if (!param)
-              param = node.typeParameters!.params[i]
+              param = nodeTypeParams.params[i]
             typeParams![p.name] = param as Node
           })
         }
@@ -380,11 +381,11 @@ function innerResolveTypeElements(
               typeParameters,
             )
           }
-          else if (typeName === 'ReturnType' && node.typeParameters) {
+          else if (typeName === 'ReturnType' && nodeTypeParams) {
             // limited support, only reference types
             const ret = resolveReturnType(
               ctx,
-              node.typeParameters.params[0],
+              nodeTypeParams.params[0],
               scope,
               typeParameters,
             )
@@ -401,26 +402,43 @@ function innerResolveTypeElements(
       }
     }
     case 'TSImportType': {
+      const nodeTypeParams = getTypeParamInstantiation(node)
+      const importArg = (node as any).argument ?? (node as any).source
+      const importSource = importArg?.value
       if (
-        getId(node.argument) === 'vue'
+        importArg && getId(importArg) === 'vue'
         && node.qualifier?.type === 'Identifier'
         && node.qualifier.name === 'ExtractPropTypes'
-        && node.typeParameters
+        && nodeTypeParams
       ) {
         return resolveExtractPropTypes(
-          resolveTypeElements(ctx, node.typeParameters.params[0], scope),
+          resolveTypeElements(ctx, nodeTypeParams.params[0], scope),
           scope,
         )
       }
       const sourceScope = importSourceToScope(
         ctx,
-        node.argument,
+        importArg,
         scope,
-        node.argument.value,
+        importSource,
       )
       const resolved = resolveTypeReference(ctx, node, sourceScope)
       if (resolved) {
-        return resolveTypeElements(ctx, resolved, resolved._ownerScope)
+        let typeParams: Record<string, Node> | undefined
+        if (
+          (resolved.type === 'TSTypeAliasDeclaration'
+            || resolved.type === 'TSInterfaceDeclaration'
+            || resolved.type === 'ClassDeclaration')
+          && resolved.typeParameters
+          && resolved.typeParameters.type !== 'Noop'
+          && nodeTypeParams
+        ) {
+          typeParams = Object.create(null)
+          resolved.typeParameters.params.forEach((p: Node, i: number) => {
+            typeParams![p.name] = nodeTypeParams.params[i] as Node
+          })
+        }
+        return resolveTypeElements(ctx, resolved, resolved._ownerScope, typeParams)
       }
       break
     }
@@ -548,7 +566,7 @@ function resolveInterfaceMembers(
   if (node.extends) {
     for (const ext of node.extends) {
       try {
-        const { props, calls } = resolveTypeElements(ctx, ext, scope)
+        const { props, calls } = resolveTypeElements(ctx, ext, scope, typeParameters)
         for (const key in props) {
           if (!hasOwn(base.props, key)) {
             base.props[key] = props[key]
@@ -1461,6 +1479,13 @@ function getReferenceName(node: ReferenceTypes): string | string[] {
   else {
     return 'default'
   }
+}
+
+function getTypeParamInstantiation(node: any): { params: Node[] } | undefined {
+  if (node?.typeParameters && node.typeParameters.type !== 'Noop')
+    return node.typeParameters
+  if (node?.typeArguments)
+    return node.typeArguments
 }
 
 function qualifiedNameToPath(node: Identifier | TSQualifiedName): string[] {
