@@ -5,7 +5,13 @@ export default defineConfig({
   dts: true,
   format: ['esm', 'cjs'],
   tsconfig: './tsconfig.app.json',
-  outExtensions() {
+  outExtensions(ctx) {
+    if (ctx.format === 'cjs') {
+      return {
+        dts: '.d.ts',
+        js: '.cjs',
+      }
+    }
     return {
       dts: '.d.ts',
       js: '.js',
