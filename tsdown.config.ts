@@ -11,4 +11,7 @@ export default defineConfig({
       js: '.js',
     }
   },
+  external: [
+    'typescript',
+  ],
 })
