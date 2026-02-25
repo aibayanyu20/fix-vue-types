@@ -23,6 +23,7 @@ export function resolveObjectKey(
   switch (node.type) {
     case 'StringLiteral':
     case 'NumericLiteral':
+    case 'Literal':
       return String(node.value)
     case 'Identifier':
       if (!computed)
@@ -100,6 +101,10 @@ export function getStringLiteralKey(
         ? node.key.value
         : node.key.type === 'NumericLiteral'
           ? String(node.key.value)
+          : node.key.type === 'Literal'
+            ? typeof node.key.value === 'string' || typeof node.key.value === 'number'
+              ? String(node.key.value)
+              : null
           : null
 }
 

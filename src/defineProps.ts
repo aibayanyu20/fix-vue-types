@@ -118,15 +118,16 @@ function genRuntimePropFromType(
           return false
         return resolveObjectKey(node.key, node.computed) === key
       },
-    ) as ObjectProperty | ObjectMethod
+    ) as ObjectProperty | ObjectMethod | Node
     if (prop) {
-      if (prop.type === 'ObjectProperty') {
+      if (prop.type === 'ObjectProperty' || prop.type === 'Property') {
         // prop has corresponding static default value
         defaultString = `default: ${ctx.getString(prop.value)}`
       }
       else {
-        defaultString = `${prop.async ? 'async ' : ''}${prop.kind !== 'method' ? `${prop.kind} ` : ''
-        }default() ${ctx.getString(prop.body)}`
+        const body = (prop as any).body ?? (prop as any).value?.body
+        defaultString = `${(prop as any).async ? 'async ' : ''}${(prop as any).kind !== 'method' ? `${(prop as any).kind} ` : ''
+        }default() ${ctx.getString(body)}`
       }
     }
   }
