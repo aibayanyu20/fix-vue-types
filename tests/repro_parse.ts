@@ -1,4 +1,4 @@
-import { parse } from '@babel/parser'
+import { parseSync } from 'oxc-parser'
 
 const code = `
 declare module "foo" {
@@ -15,10 +15,12 @@ declare module "foo" {
 `
 
 try {
-  parse(code, {
-    plugins: ['typescript'],
-    sourceType: 'module'
+  const result = parseSync('repro.ts', code, {
+    lang: 'ts',
+    sourceType: 'module',
   })
+  if (result.errors.length)
+    throw new Error(result.errors[0]!.message)
   console.log("Parse successful")
 } catch (e) {
   console.error("Parse failed:", e.message)

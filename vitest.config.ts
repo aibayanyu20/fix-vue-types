@@ -9,6 +9,7 @@ export default defineConfig({
       '**/__tests__/**/*.spec.ts',
     ],
     exclude: [
+      '**/node_modules/**',
       'core-main',
     ],
   },

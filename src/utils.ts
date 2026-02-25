@@ -11,7 +11,7 @@ import type {
   StringLiteral,
   TSMethodSignature,
   TSPropertySignature,
-} from '@babel/types'
+} from './ast'
 import path from 'node:path'
 
 export const UNKNOWN_TYPE = 'Unknown'

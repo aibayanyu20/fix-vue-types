@@ -1,4 +1,4 @@
-import type { ParserPlugin } from '@babel/parser'
+export type TsModule = any
 
 export interface SFCScriptCompileOptions {
   /**
@@ -14,10 +14,6 @@ export interface SFCScriptCompileOptions {
    * Enable/disable source map. Defaults to true.
    */
   sourceMap?: boolean
-  /**
-   * https://babeljs.io/docs/en/babel-parser#plugins
-   */
-  babelParserPlugins?: ParserPlugin[]
   /**
    * A list of files to parse for global types to be made available for type
    * resolving in SFC macros. The list must be fully resolved file system paths.

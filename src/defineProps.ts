@@ -4,7 +4,7 @@ import type {
   ObjectExpression,
   ObjectMethod,
   ObjectProperty,
-} from '@babel/types'
+} from './ast'
 import type { TypeResolveContext } from './resolveType'
 import { BindingTypes, isFunctionType, unwrapTSNode } from '@vue/compiler-dom'
 import {

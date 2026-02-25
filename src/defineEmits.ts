@@ -3,7 +3,7 @@ import type {
   Identifier,
   ObjectPattern,
   RestElement,
-} from '@babel/types'
+} from './ast'
 import type { TypeResolveContext } from './resolveType'
 import {
   resolveTypeElements,

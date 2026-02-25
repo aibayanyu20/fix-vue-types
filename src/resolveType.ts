@@ -27,18 +27,17 @@ import type {
   TSTypeLiteral,
   TSTypeQuery,
   TSTypeReference,
-} from '@babel/types'
+} from './ast'
 import type TS from 'typescript'
 import type { ScriptCompileContext } from './context'
 import type { ImportBinding, SFCScriptCompileOptions } from './types'
 import { realpathSync } from 'node:fs'
 import { dirname, extname, isAbsolute, join, resolve } from 'node:path'
-import { parse as babelParse } from '@babel/parser'
 import { capitalize, hasOwn } from '@vue/shared'
 import { minimatch as isMatch } from 'minimatch'
 import { parse } from 'vue/compiler-sfc'
 import { createCache } from './cache'
-import { resolveParserPlugins } from './context'
+import { parseOxcProgram } from './oxcCompat'
 import {
   createGetCanonicalFileName,
   getId,
@@ -112,14 +111,14 @@ const SupportedBuiltinsSet = new Set([
 export type SimpleTypeResolveOptions = Partial<
   Pick<
     SFCScriptCompileOptions,
-        'globalTypeFiles' | 'fs' | 'babelParserPlugins' | 'isProd'
+    'globalTypeFiles' | 'fs' | 'isProd'
   >
 >
 
 /**
  * TypeResolveContext is compatible with ScriptCompileContext
  * but also allows a simpler version of it with minimal required properties
- * when resolveType needs to be used in a non-SFC context, e.g. in a babel
+ * when resolveType needs to be used in a non-SFC context, e.g. in a transform
  * plugin. The simplest context can be just:
  * ```ts
  * const ctx: SimpleTypeResolveContext = {
@@ -1895,7 +1894,7 @@ export function fileToScope(
   }
   const fs = resolveFS(ctx)!
   const source = fs.readFile(filename) || ''
-  const body = parseFile(filename, source, fs, ctx.options.babelParserPlugins)
+  const body = parseFile(filename, source, fs)
   const scope = new TypeScope(filename, source, 0, recordImports(body))
   recordTypes(ctx, body, scope, asGlobal)
   fileToScopeCache.set(filename, scope)
@@ -1906,18 +1905,10 @@ function parseFile(
   filename: string,
   content: string,
   fs: FS,
-  parserPlugins?: SFCScriptCompileOptions['babelParserPlugins'],
 ): Statement[] {
   const ext = extname(filename)
   if (ext === '' || ext === '.mts' || ext === '.tsx' || ext === '.mtsx' || ext === '.cts' || ext === '.mcts') {
-    return babelParse(content, {
-      plugins: resolveParserPlugins(
-        ext.slice(1),
-        parserPlugins,
-        /\\.d\\.m?[tc]sx?$/.test(filename),
-      ),
-      sourceType: 'module',
-    }).program.body
+    return parseOxcProgram(filename, content, ext.slice(1)).body
   }
   // simulate `allowArbitraryExtensions` on TypeScript >= 5.0
   const isUnknownTypeSource = !/\.[cm]?[tj]sx?$/.test(filename)
@@ -1925,10 +1916,7 @@ function parseFile(
   const hasArbitraryTypeDeclaration
     = isUnknownTypeSource && fs.fileExists(arbitraryTypeSource)
   if (hasArbitraryTypeDeclaration) {
-    return babelParse(fs.readFile(arbitraryTypeSource)!, {
-      plugins: resolveParserPlugins('ts', parserPlugins, true),
-      sourceType: 'module',
-    }).program.body
+    return parseOxcProgram(arbitraryTypeSource, fs.readFile(arbitraryTypeSource)!, 'ts').body
   }
 
   if (ext === '.vue') {
@@ -1956,19 +1944,9 @@ function parseFile(
           + secondBlock.content
     }
     const lang = script?.lang || scriptSetup?.lang
-    return babelParse(scriptContent, {
-      plugins: resolveParserPlugins(lang!, parserPlugins),
-      sourceType: 'module',
-    }).program.body
+    return parseOxcProgram(filename, scriptContent, lang!).body
   }
-  return babelParse(content, {
-    plugins: resolveParserPlugins(
-      ext.slice(1),
-      parserPlugins,
-      /\.d\.m?ts$/.test(filename),
-    ),
-    sourceType: 'module',
-  }).program.body
+  return parseOxcProgram(filename, content, ext.slice(1)).body
 }
 
 function ctxToScope(ctx: TypeResolveContext): TypeScope {

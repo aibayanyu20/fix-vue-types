@@ -1,13 +1,12 @@
-import type { ParserPlugin } from '@babel/parser'
-import type { CallExpression, Node, ObjectPattern, Program } from '@babel/types'
+import type { CallExpression, Node, ObjectPattern, Program } from './ast'
 import type { BindingMetadata } from '@vue/compiler-core'
 import type { SFCDescriptor } from 'vue/compiler-sfc'
 import type { PropsDestructureBindings } from './defineProps'
 import type { TypeScope } from './resolveType'
 import type { ImportBinding, SFCScriptCompileOptions } from './types'
-import { parse as babelParse } from '@babel/parser'
-import { generateCodeFrame, isArray } from '@vue/shared'
+import { generateCodeFrame } from '@vue/shared'
 import MagicString from 'magic-string'
+import { parseOxcProgram } from './oxcCompat'
 import { isJS, isTS } from './utils'
 
 export type ModelDecl = any // Mocked since defineModel is not extracted
@@ -111,18 +110,13 @@ export class ScriptCompileContext {
           ? customElement
           : customElement(filename)
     }
-    // resolve parser plugins
-    const plugins: ParserPlugin[] = resolveParserPlugins(
-      (scriptLang || scriptSetupLang)!,
-      options.babelParserPlugins,
-    )
-
     function parse(input: string, offset: number): Program {
       try {
-        return babelParse(input, {
-          plugins,
-          sourceType: 'module',
-        }).program
+        return parseOxcProgram(
+          descriptor.filename,
+          input,
+          (scriptLang || scriptSetupLang)!,
+        )
       }
       catch (e: any) {
         e.message = `[vue/compiler-sfc] ${e.message}\n\n${descriptor.filename
@@ -174,41 +168,4 @@ function generateError(
     node.start! + offset,
     node.end! + offset,
   )}`
-}
-
-export function resolveParserPlugins(
-  lang: string,
-  userPlugins?: ParserPlugin[],
-  dts = false,
-): ParserPlugin[] {
-  const plugins: ParserPlugin[] = []
-  if (
-    !userPlugins
-    || !userPlugins.some(
-      p =>
-        p === 'importAssertions'
-        || p === 'importAttributes'
-        || (isArray(p) && p[0] === 'importAttributes'),
-    )
-  ) {
-    plugins.push('importAttributes')
-  }
-  if (lang === 'jsx' || lang === 'tsx' || lang === 'mtsx') {
-    plugins.push('jsx')
-  }
-  else if (userPlugins) {
-    // If don't match the case of adding jsx
-    // should remove the jsx from user options
-    userPlugins = userPlugins.filter(p => p !== 'jsx')
-  }
-  if (lang === 'ts' || lang === 'mts' || lang === 'tsx' || lang === 'mtsx' || lang === 'cts' || lang === 'mcts') {
-    plugins.push(['typescript', { dts }], 'explicitResourceManagement')
-    if (!userPlugins || !userPlugins.includes('decorators')) {
-      plugins.push('decorators-legacy')
-    }
-  }
-  if (userPlugins) {
-    plugins.push(...userPlugins)
-  }
-  return plugins
 }

@@ -28,14 +28,14 @@
     "prepublish": "pnpm build"
   },
   "dependencies": {
-    "@babel/parser": "^7.28.5",
-    "@babel/types": "^7.28.5",
+    "@oxc-project/types": "^0.115.0",
     "@vue/compiler-core": "^3.5.25",
     "@vue/compiler-dom": "^3.5.25",
     "@vue/shared": "^3.5.25",
     "lru-cache": "^11.2.4",
     "magic-string": "^0.30.21",
     "minimatch": "^10.1.1",
+    "oxc-parser": "^0.115.0",
     "vue": "^3.5.24"
   },
   "devDependencies": {

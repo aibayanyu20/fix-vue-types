@@ -1,4 +1,4 @@
-import type { CallExpression, Node, ObjectExpression } from '@babel/types'
+import type { CallExpression, Node, ObjectExpression } from '../src/ast'
 import * as fs from 'node:fs'
 import { BindingTypes } from '@vue/compiler-core'
 import { walk } from 'estree-walker'
