@@ -2441,7 +2441,9 @@ export function inferRuntimeType(
   try {
     switch (node.type) {
       case 'TSStringKeyword':
-        return ['String']
+        // as a key type (`Record<string, T>`, `keyof string`), numeric keys
+        // are valid too: TS widens it to `string | number`
+        return isKeyOf ? ['String', 'Number'] : ['String']
       case 'TSNumberKeyword':
         return ['Number']
       case 'TSBooleanKeyword':
@@ -2480,6 +2482,9 @@ export function inferRuntimeType(
                 if (type === UNKNOWN_TYPE)
                   return [UNKNOWN_TYPE]
                 types.add(type)
+                // `keyof { [key: string]: T }` is `string | number`
+                if (type === 'String')
+                  types.add('Number')
               }
             }
             else {
