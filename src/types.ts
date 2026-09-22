@@ -65,7 +65,23 @@ export interface SFCScriptCompileOptions {
    * Transform Vue SFCs into custom elements.
    */
   customElement?: boolean | ((filename: string) => boolean)
+  /**
+   * Type names that must not be resolved into runtime props. A matching
+   * reference contributes no members in an `extends`/intersection position
+   * and infers to `null` as a prop type, exactly like `/* @vue-ignore *\/`.
+   * Unlike the comment it survives declaration emit, so it works on types
+   * consumed from a published `.d.ts`. Matched against the local reference
+   * name (the last segment of a qualified name). The `VueIgnore<T>` wrapper
+   * is always recognised, independent of this option.
+   *
+   * @example ignoreTypes: [/EmitsProps$/]
+   */
+  ignoreTypes?: IgnoreTypesOption
 }
+
+export type IgnoreTypesOption
+  = | (string | RegExp)[]
+    | ((name: string, context: { filename: string }) => boolean)
 
 export interface ImportBinding {
   isType: boolean

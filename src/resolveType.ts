@@ -246,8 +246,9 @@ function innerResolveTypeElements(
   typeParameters?: Record<string, Node>,
 ): ResolvedElements {
   if (
-    node.leadingComments
-    && node.leadingComments.some(c => c.value.includes('@vue-ignore'))
+    (node.leadingComments
+      && node.leadingComments.some(c => c.value.includes('@vue-ignore')))
+    || isIgnoredReference(ctx, node, scope)
   ) {
     return { props: {} }
   }
@@ -337,20 +338,11 @@ function innerResolveTypeElements(
       if (resolved) {
         let typeParams: Record<string, Node> | undefined
         if (
-          (resolved.type === 'TSTypeAliasDeclaration'
-            || resolved.type === 'TSInterfaceDeclaration'
-            || resolved.type === 'ClassDeclaration')
-          && resolved.typeParameters
-          && resolved.typeParameters.type !== 'Noop'
-          && nodeTypeParams
+          resolved.type === 'TSTypeAliasDeclaration'
+          || resolved.type === 'TSInterfaceDeclaration'
+          || resolved.type === 'ClassDeclaration'
         ) {
-          typeParams = Object.create(null)
-          resolved.typeParameters.params.forEach((p: Node, i: number) => {
-            let param = typeParameters && typeParameters[p.name]
-            if (!param)
-              param = nodeTypeParams.params[i]
-            typeParams![p.name] = param as Node
-          })
+          typeParams = instantiateTypeParams(resolved, nodeTypeParams, scope, typeParameters)
         }
         return resolveTypeElements(
           ctx,
@@ -426,17 +418,11 @@ function innerResolveTypeElements(
       if (resolved) {
         let typeParams: Record<string, Node> | undefined
         if (
-          (resolved.type === 'TSTypeAliasDeclaration'
-            || resolved.type === 'TSInterfaceDeclaration'
-            || resolved.type === 'ClassDeclaration')
-          && resolved.typeParameters
-          && resolved.typeParameters.type !== 'Noop'
-          && nodeTypeParams
+          resolved.type === 'TSTypeAliasDeclaration'
+          || resolved.type === 'TSInterfaceDeclaration'
+          || resolved.type === 'ClassDeclaration'
         ) {
-          typeParams = Object.create(null)
-          resolved.typeParameters.params.forEach((p: Node, i: number) => {
-            typeParams![p.name] = nodeTypeParams.params[i] as Node
-          })
+          typeParams = instantiateTypeParams(resolved, nodeTypeParams, scope)
         }
         return resolveTypeElements(ctx, resolved, resolved._ownerScope, typeParams)
       }
@@ -704,6 +690,8 @@ function resolveArrayElementType(
     )
   }
   if (node.type === 'TSTypeReference') {
+    if (isIgnoredReference(ctx, node, scope))
+      return []
     // Array<type>
     if (getReferenceName(node) === 'Array' && node.typeParameters) {
       return node.typeParameters.params
@@ -827,28 +815,17 @@ function resolveStringType(
             if (resolved.typeParameters) {
     */
     case 'TSTypeReference': {
+      if (isIgnoredReference(ctx, node, scope))
+        return []
       const resolved = resolveTypeReference(ctx, node, scope)
       if (resolved) {
         if (resolved.type === 'TSTypeAliasDeclaration') {
-          if (node.typeParameters) {
-            const typeParams: Record<string, Node> = Object.create(null)
-            if (resolved.typeParameters) {
-              resolved.typeParameters.params.forEach((p: Node, i: number) => {
-                typeParams![p.name] = node.typeParameters!.params[i]
-              })
-            }
-            return resolveStringType(
-              ctx,
-              resolved.typeAnnotation,
-              resolved._ownerScope,
-              typeParams,
-            )
-          }
+          const typeParams = instantiateTypeParams(resolved, getTypeParamInstantiation(node), scope)
           return resolveStringType(
             ctx,
             resolved.typeAnnotation,
             resolved._ownerScope,
-            typeParameters,
+            typeParams ?? typeParameters,
           )
         }
         return resolveStringType(ctx, resolved, scope, typeParameters)
@@ -1072,7 +1049,11 @@ function resolveBuiltin(
       )
       const res: ResolvedElements = { props: {}, calls: t.calls }
       for (const key of picked) {
-        res.props[key] = t.props[key]
+        // A key the source does not carry (it may have resolved partially,
+        // e.g. an unresolvable extends base) must not become an `undefined`
+        // entry that crashes every consumer of `props`.
+        if (t.props[key])
+          res.props[key] = t.props[key]
       }
       return res
     }
@@ -1461,6 +1442,56 @@ function innerResolveTypeReference(
   }
 }
 
+/**
+ * Identity wrapper recognised by name: `extends Base, VueIgnore<Emits>` or
+ * `x?: VueIgnore<Heavy>` skips resolution of the wrapped type the way
+ * `/* @vue-ignore *\/` does, but survives `.d.ts` emit.
+ */
+export const VUE_IGNORE_TYPE = 'VueIgnore'
+
+type IgnorePredicate = (name: string, scope: TypeScope) => boolean
+const ignorePredicateCache = new WeakMap<object, IgnorePredicate>()
+
+function getIgnorePredicate(ctx: TypeResolveContext): IgnorePredicate | undefined {
+  const option = ctx.options?.ignoreTypes
+  if (!option)
+    return
+  let predicate = ignorePredicateCache.get(option)
+  if (!predicate) {
+    predicate = typeof option === 'function'
+      ? (name, scope) => option(name, { filename: scope.filename })
+      : name => option.some((matcher) => {
+        if (typeof matcher === 'string')
+          return matcher === name
+        matcher.lastIndex = 0
+        return matcher.test(name)
+      })
+    ignorePredicateCache.set(option, predicate)
+  }
+  return predicate
+}
+
+/**
+ * True when a type reference must be skipped: the `VueIgnore<T>` wrapper, or
+ * a name matched by `options.ignoreTypes`. Must be consulted before the
+ * reference is followed, so nothing about the real declaration is memoised.
+ */
+function isIgnoredReference(ctx: TypeResolveContext, node: Node, scope: TypeScope): boolean {
+  if (
+    node.type !== 'TSTypeReference'
+    && node.type !== 'TSExpressionWithTypeArguments'
+    && node.type !== 'TSImportType'
+  ) {
+    return false
+  }
+  const ref = getReferenceName(node as ReferenceTypes)
+  const name = typeof ref === 'string' ? ref : ref[ref.length - 1]!
+  if (name === VUE_IGNORE_TYPE)
+    return true
+  const predicate = getIgnorePredicate(ctx)
+  return !!predicate && predicate(name, scope)
+}
+
 function getReferenceName(node: ReferenceTypes): string | string[] {
   const ref
     = node.type === 'TSTypeReference'
@@ -1476,8 +1507,24 @@ function getReferenceName(node: ReferenceTypes): string | string[] {
   else if (ref?.type === 'TSQualifiedName') {
     return qualifiedNameToPath(ref)
   }
+  else if (ref?.type === 'MemberExpression') {
+    // `extends ns.Foo` is an expression position, so the parser emits a
+    // MemberExpression rather than a TSQualifiedName.
+    return memberExpressionToPath(ref) ?? 'default'
+  }
   else {
     return 'default'
+  }
+}
+
+function memberExpressionToPath(node: Node): string[] | undefined {
+  if (node.computed || node.property?.type !== 'Identifier')
+    return
+  if (node.object?.type === 'Identifier')
+    return [node.object.name, node.property.name]
+  if (node.object?.type === 'MemberExpression') {
+    const head = memberExpressionToPath(node.object)
+    return head && [...head, node.property.name]
   }
 }
 
@@ -1486,6 +1533,47 @@ function getTypeParamInstantiation(node: any): { params: Node[] } | undefined {
     return node.typeParameters
   if (node?.typeArguments)
     return node.typeArguments
+}
+
+function getTypeParamName(p: Node): string {
+  return typeof p.name === 'string' ? p.name : p.name?.name
+}
+
+/**
+ * Map a generic declaration's type parameters to the arguments supplied at
+ * the reference site. A parameter with no argument falls back to its declared
+ * default, so `interface P<T extends V = V> { min?: T }` referenced as plain
+ * `P` resolves `T` to `V` the way tsc does. `outer` (the caller's own generic
+ * scope) wins over both when it binds the same name.
+ */
+function instantiateTypeParams(
+  resolved: Node & MaybeWithScope,
+  nodeTypeParams: { params: Node[] } | undefined,
+  refScope: TypeScope,
+  outer?: Record<string, Node>,
+): Record<string, Node> | undefined {
+  const decl = resolved.typeParameters
+  if (!decl || decl.type === 'Noop' || !decl.params?.length)
+    return
+  let typeParams: Record<string, Node> | undefined
+  decl.params.forEach((p: Node, i: number) => {
+    const name = getTypeParamName(p)
+    let arg: (Node & MaybeWithScope) | undefined = outer && outer[name]
+    if (!arg) {
+      arg = nodeTypeParams?.params[i]
+      // An explicit argument is written at the reference site; a default is
+      // written next to the declaration. Tag each with the scope it must be
+      // resolved in, otherwise `T` later falls back to the root file's scope
+      // and a cross-file `= ValueType` silently becomes `null`.
+      if (arg)
+        arg._ownerScope ||= refScope
+      else if (p.default)
+        (arg = p.default)!._ownerScope ||= resolved._ownerScope
+    }
+    if (arg)
+      (typeParams ||= Object.create(null))![name] = arg
+  })
+  return typeParams
 }
 
 function qualifiedNameToPath(node: Identifier | TSQualifiedName): string[] {
@@ -1645,14 +1733,14 @@ function importSourceToScope(
   }
 }
 
-function resolveExt(filename: string, fs: FS) {
+function resolveExt(filename: string, fs: FS): string | undefined {
   // #8339 ts may import .js but we should resolve to corresponding ts or d.ts
   filename = filename.replace(/\.js$/, '')
   const tryResolve = (filename: string) => {
     if (fs.fileExists(filename))
       return filename
   }
-  return (
+  const resolved = (
     tryResolve(`${filename}.ts`)
     || tryResolve(`${filename}.tsx`)
     || tryResolve(`${filename}.d.ts`)
@@ -1669,6 +1757,15 @@ function resolveExt(filename: string, fs: FS) {
     || tryResolve(joinPaths(filename, `index.d.cts`))
     || tryResolve(filename)
   )
+  if (resolved)
+    return resolved
+  // Some published d.ts still point at monorepo source paths such as
+  // `../../mini-decimal/src` (tsconfig `paths` rewritten into the emitted
+  // declarations). The source folder is not in the tarball, but the emitted
+  // declarations next to it are, so retry against `dist`.
+  const distFallback = filename.replace(/\/src(?=\/|$)/, '/dist')
+  if (distFallback !== filename)
+    return resolveExt(distFallback, fs)
 }
 
 function resolveObjectExpression(
@@ -1866,7 +1963,19 @@ function resolveWithTS(
     if (filename.endsWith('.vue') && !filename.endsWith('.d.vue')) {
       filename = filename.replace(/\.ts$/, '')
     }
-    return fs.realpath ? fs.realpath(filename) : filename
+    // Always hand back the real path. pnpm links packages into per-dependent
+    // node_modules folders, and a relative import inside the resolved d.ts
+    // (`../../mini-decimal`) only finds its sibling next to the real file.
+    return fs.realpath ? fs.realpath(filename) : safeRealpath(filename)
+  }
+}
+
+function safeRealpath(filename: string): string {
+  try {
+    return realpathSync(filename)
+  }
+  catch {
+    return filename
   }
 }
 
@@ -2114,6 +2223,19 @@ function recordTypes(
                 // exporting local defined type
                 exportedTypes[exported] = types[local]
               }
+              else if (imports[local]) {
+                // `import { T } from './x'` followed by `export { T }`:
+                // re-exporting an imported binding. Register a reference that
+                // resolves through this scope's imports, like `export { T } from`.
+                exportedTypes[exported] = {
+                  type: 'TSTypeReference',
+                  typeName: {
+                    type: 'Identifier',
+                    name: local,
+                  },
+                  _ownerScope: scope,
+                }
+              }
             }
           }
         }
@@ -2309,8 +2431,9 @@ export function inferRuntimeType(
   typeParameters?: Record<string, Node>,
 ): string[] {
   if (
-    node.leadingComments
-    && node.leadingComments.some(c => c.value.includes('@vue-ignore'))
+    (node.leadingComments
+      && node.leadingComments.some(c => c.value.includes('@vue-ignore')))
+    || isIgnoredReference(ctx, node, scope)
   ) {
     return [UNKNOWN_TYPE]
   }
@@ -2439,13 +2562,8 @@ export function inferRuntimeType(
               return ['Function']
             }
 
-            if (node.typeParameters) {
-              const typeParams: Record<string, Node> = Object.create(null)
-              if (resolved.typeParameters) {
-                resolved.typeParameters.params.forEach((p: Node, i: number) => {
-                  typeParams![p.name] = node.typeParameters!.params[i]
-                })
-              }
+            const typeParams = instantiateTypeParams(resolved, getTypeParamInstantiation(node), scope)
+            if (typeParams) {
               return inferRuntimeType(
                 ctx,
                 resolved.typeAnnotation,
@@ -2724,14 +2842,27 @@ function flattenTypes(
   isKeyOf: boolean = false,
   typeParameters: Record<string, Node> | undefined = undefined,
 ): string[] {
+  // A type pulled out of another declaration (e.g. `Props['key']` resolved by
+  // resolveIndexType) carries the scope it was declared in. Prefer that scope
+  // over the caller's, otherwise references local to the declaring file
+  // (`strokeLinecap?: StrokeLinecapType`) are looked up in the wrong file and
+  // silently degrade to `null` — unless a previous resolution happened to
+  // memoize `_resolvedReference` on the node, which made the result depend on
+  // module transform order.
+  const scopeOf = (t: TSType & MaybeWithScope) => t._ownerScope || scope
+  if (types.length === 0) {
+    // nothing resolved (e.g. an ignored type behind `[number]`): unknown,
+    // not an empty constructor list that would print `type: undefined`
+    return [UNKNOWN_TYPE]
+  }
   if (types.length === 1) {
-    return inferRuntimeType(ctx, types[0], scope, isKeyOf, typeParameters)
+    return inferRuntimeType(ctx, types[0], scopeOf(types[0]), isKeyOf, typeParameters)
   }
   return [
     ...new Set(
       ([] as string[]).concat(
         ...types.map(t =>
-          inferRuntimeType(ctx, t, scope, isKeyOf, typeParameters),
+          inferRuntimeType(ctx, t, scopeOf(t), isKeyOf, typeParameters),
         ),
       ),
     ),
