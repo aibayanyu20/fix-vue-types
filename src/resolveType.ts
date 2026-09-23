@@ -2583,9 +2583,15 @@ export function inferRuntimeType(
         }
         if (node.typeName.type === 'Identifier') {
           if (typeParameters && typeParameters[node.typeName.name]) {
+            const arg = typeParameters[node.typeName.name] as Node & MaybeWithScope
+            // Resolve the argument where it was written (see resolveCheckType);
+            // re-applying this map would send a same-named forwarded
+            // parameter back to itself.
+            if (arg._ownerScope)
+              return inferRuntimeType(ctx, arg, arg._ownerScope, isKeyOf)
             return inferRuntimeType(
               ctx,
-              typeParameters[node.typeName.name],
+              arg,
               scope,
               isKeyOf,
               typeParameters,
@@ -3063,7 +3069,10 @@ function resolveCheckType(
   typeParameters?: Record<string, Node>,
 ): TSType {
   let resolvedCheckType = checkType
-  while (resolvedCheckType.type === 'TSTypeReference') {
+  // guards against cycles among type parameter bindings
+  const seen = new Set<Node>()
+  while (resolvedCheckType.type === 'TSTypeReference' && !seen.has(resolvedCheckType)) {
+    seen.add(resolvedCheckType)
     const resolved = resolveTypeReference(ctx, resolvedCheckType, scope)
     if (resolved) {
       if (resolved.type === 'TSTypeAliasDeclaration') {
@@ -3075,7 +3084,14 @@ function resolveCheckType(
       }
     }
     else if (resolvedCheckType.typeName.type === 'Identifier' && typeParameters && typeParameters[resolvedCheckType.typeName.name]) {
-      resolvedCheckType = typeParameters[resolvedCheckType.typeName.name] as TSType
+      const arg = typeParameters[resolvedCheckType.typeName.name] as TSType & MaybeWithScope
+      resolvedCheckType = arg
+      // The argument was written at the reference site: resolve it in that
+      // scope, not against this parameter map. Otherwise a forwarded
+      // parameter with the same name (`Foo<T>` inside a generic declaring
+      // `T`) maps back to itself.
+      scope = arg._ownerScope || scope
+      typeParameters = undefined
     }
     else {
       break
